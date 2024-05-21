@@ -33,6 +33,7 @@
 		<module>vector-stores/spring-ai-milvus-store</module>
 		<module>vector-stores/spring-ai-mongodb-atlas-store</module>
 		<module>vector-stores/spring-ai-neo4j-store</module>
+		<module>vector-stores/spring-ai-oracle-store</module>
 		<module>vector-stores/spring-ai-pgvector-store</module>
 		<module>vector-stores/spring-ai-pinecone-store</module>
 		<module>vector-stores/spring-ai-qdrant-store</module>
@@ -153,6 +154,7 @@
 		<pdfbox.version>3.0.1</pdfbox.version>
 		<pgvector.version>0.1.4</pgvector.version>
 		<sap.hanadb.version>2.20.11</sap.hanadb.version>
+		<ojdbc.version>23.4.0.24.05</ojdbc.version>
 		<postgresql.version>42.7.2</postgresql.version>
 		<milvus.version>2.3.4</milvus.version>
 		<pinecone.version>0.8.0</pinecone.version>
