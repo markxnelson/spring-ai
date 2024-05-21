@@ -184,13 +184,13 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		logger.debug("Embeddings size: " + queryEmbeddings.size());
 
 		logger.debug("Distance metrics: " + this.distanceType);
-		logger.debug("Distance metrics function: " + this.distanceType.shorthandFunction);
+		logger.debug("Distance metrics function: " + this.distanceType.name());
 
 		int topK = request.getTopK();
 
 		try {
 			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK,
-					this.distanceType.shorthandFunction);
+					this.distanceType.name());
 		}
 		catch (Exception e) {
 			logger.error(e.toString());
@@ -223,7 +223,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		try {
 
 			String similaritySql = "select id, embeddings, metadata, text from " + vectortab + " order by "
-					+ distance_metrics_func + "(embeddings, ?)" + " fetch first ? rows only";
+					+  "vector_distance(embeddings, ?, " + distance_metrics_func + ")" + " fetch first ? rows only";
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
@@ -249,29 +249,10 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	// ---------------------------------------------------------------------------------
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		int initialSize = 0;
-		try {
-
-			initialSize = jdbcTemplate.queryForObject("select count(*) from " + this.VECTOR_TABLE, Integer.class);
-			logger.debug("Table " + this.VECTOR_TABLE + " exists with " + initialSize + " chunks.");
-
-			if (removeExistingVectorStoreTable) {
-				logger.debug("Dropping table " + this.VECTOR_TABLE + " because removeExistingVectorStoreTable = true.");
-				jdbcTemplate.execute(String.format("""
-						begin
-						  drop table %s;
-						exception
-						  when other then
-						    if sqlcode != -942 then
-						      raise;
-						    end if;
-						end;
-						""", this.VECTOR_TABLE));
-			}
-		}
-		catch (Exception e) {
+		if (removeExistingVectorStoreTable) {
 			try {
-				logger.debug("Dropping table " + this.VECTOR_TABLE);
+				logger.debug("Dropping table " + this.VECTOR_TABLE + " because removeExistingVectorStoreTable = true.");
+			
 				jdbcTemplate.execute(String.format("""
 						        begin
 						          execute immediate 'drop table %s cascade constraints';
@@ -282,35 +263,35 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 						            end if;
 						        end;
 						""", this.VECTOR_TABLE));
-			}
-			catch (Exception ex1) {
+			} catch (Exception e) {
 				logger.error("Error dropping table " + this.VECTOR_TABLE + " \n" + e.getMessage());
-				throw (ex1);
-			}
-
-			try {
-				this.jdbcTemplate.execute(String.format("""
-						        begin
-						          execute immediate 'create table %s (
-						            id number generated as identity,
-						            text clob,
-						            embeddings vector,
-						            metadata json,
-						            primary key (id))';
-						        exception
-						          when others then
-						            if sqlcode != -942 then
-						              raise;
-						            end if;
-						        end;
-						""", this.VECTOR_TABLE));
-				logger.debug("Create table " + this.VECTOR_TABLE);
-			}
-			catch (Exception ex2) {
-				logger.error("Error creating table\n" + e.getMessage());
-				throw (ex2);
+				throw (e);
 			}
 		}
+
+        try {
+            this.jdbcTemplate.execute(String.format("""
+                            begin
+                                execute immediate 'create table %s (
+                                id number generated as identity,
+                                text clob,
+                                embeddings vector,
+                                metadata json,
+                                primary key (id))';
+                            exception
+                                when others then
+                                if sqlcode != -942 then
+                                    raise;
+                                end if;
+                            end;
+                    """, this.VECTOR_TABLE));
+            logger.debug("Create table " + this.VECTOR_TABLE);
+        }
+        catch (Exception e) {
+            logger.error("Error creating table\n" + e.getMessage());
+            throw (e);
+        }
+		
 		return;
 	}
 
