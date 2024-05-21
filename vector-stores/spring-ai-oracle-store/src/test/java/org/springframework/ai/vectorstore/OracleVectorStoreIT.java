@@ -82,7 +82,7 @@ public class OracleVectorStoreIT {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withUserConfiguration(TestApplication.class)
-		.withPropertyValues("test.spring.ai.vectorstore.pgvector.distanceType=COSINE_DISTANCE",
+		.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=COSINE",
 
 				// JdbcTemplate configuration
 				String.format("app.datasource.url=%s", oracleContainer.getJdbcUrl()),
@@ -106,6 +106,8 @@ public class OracleVectorStoreIT {
 
 				List<Document> results = vectorStore
 					.similaritySearch(SearchRequest.query("What is Great Depression").withTopK(1));
+
+				System.out.println("RESULTS:\n" + results.toString());
 
 				assertThat(results).hasSize(1);
 				Document resultDoc = results.get(0);
@@ -132,7 +134,7 @@ public class OracleVectorStoreIT {
 
 		@Bean
 		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingClient embeddingClient) {
-			return new OracleVectorStore(jdbcTemplate, embeddingClient, OracleVectorStore.INVALID_EMBEDDING_DIMENSION,
+			return new OracleVectorStore(jdbcTemplate, embeddingClient, OracleVectorStore.OPENAI_EMBEDDING_DIMENSION,
 					distanceType, true);
 		}
 
