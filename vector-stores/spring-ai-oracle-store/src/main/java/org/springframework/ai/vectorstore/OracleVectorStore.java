@@ -123,7 +123,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		int size = documents.size();
 
-		this.jdbcTemplate.batchUpdate("insert into " + this.VECTOR_TABLE + " (text,embeddings,metadata) values (?,?,?)",
+		this.jdbcTemplate.batchUpdate(
+				"insert into " + this.VECTOR_TABLE + " (text, embeddings, metadata) values (?,?,?)",
 				new BatchPreparedStatementSetter() {
 					@Override
 					public void setValues(PreparedStatement ps, int i) throws SQLException {
@@ -221,8 +222,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		try {
 
-			String similaritySql = "SELECT id,embeddings,metadata,text FROM " + vectortab + " ORDER BY "
-					+ distance_metrics_func + "(embeddings, ?)" + " FETCH FIRST ? ROWS ONLY";
+			String similaritySql = "select id, embeddings, metadata, text from " + vectortab + " order by "
+					+ distance_metrics_func + "(embeddings, ?)" + " fetch first ? rows only";
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
