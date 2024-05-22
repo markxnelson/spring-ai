@@ -231,7 +231,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 				}
 			}, new RowMapper<VectorData>() {
 				public VectorData mapRow(ResultSet rs, int rowNum) throws SQLException {
-					return new VectorData(rs.getString("id"), rs.getObject("embeddings", double[].class),
+					return new VectorData(rs.getString("id"), rs.getObject("embeddings", float[].class),
 							rs.getObject("text", String.class), rs.getObject("metadata", OracleJsonObject.class));
 				}
 			});
