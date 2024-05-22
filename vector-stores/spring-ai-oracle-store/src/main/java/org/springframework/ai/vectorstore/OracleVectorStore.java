@@ -28,7 +28,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -60,7 +60,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private JdbcTemplate jdbcTemplate;
 
-	EmbeddingClient embeddingClient;
+	EmbeddingModel embeddingClient;
 
 	private int dimensions;
 
@@ -105,11 +105,11 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	}
 
-	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingClient embeddingClient) {
+	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 		this(jdbcTemplate, embeddingClient, INVALID_EMBEDDING_DIMENSION, OracleDistanceType.COSINE, false);
 	}
 
-	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingClient embeddingClient, int dimensions,
+	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions,
 			OracleDistanceType distanceType, boolean removeExistingVectorStoreTable) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.embeddingClient = embeddingClient;

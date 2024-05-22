@@ -28,8 +28,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingClient;
-import org.springframework.ai.openai.OpenAiEmbeddingClient;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringBootConfiguration;
@@ -133,7 +133,7 @@ public class OracleVectorStoreIT {
 		OracleVectorStore.OracleDistanceType distanceType;
 
 		@Bean
-		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingClient embeddingClient) {
+		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 			return new OracleVectorStore(jdbcTemplate, embeddingClient, OracleVectorStore.OPENAI_EMBEDDING_DIMENSION,
 					distanceType, true);
 		}
@@ -156,8 +156,8 @@ public class OracleVectorStoreIT {
 		}
 
 		@Bean
-		public EmbeddingClient embeddingClient() {
-			return new OpenAiEmbeddingClient(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
+		public EmbeddingModel embeddingClient() {
+			return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
 		}
 
 	}
