@@ -140,9 +140,9 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 						}
 
 						List<Double> vectorList = embeddingClient.embed(document);
-						double[] embeddings = new double[vectorList.size()];
+						float[] embeddings = new float[vectorList.size()];
 						for (int j = 0; j < vectorList.size(); j++) {
-							embeddings[j] = vectorList.get(j);
+							embeddings[j] = vectorList.get(j).floatValue();
 						}
 
 						ps.setString(1, text);
@@ -189,8 +189,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		int topK = request.getTopK();
 
 		try {
-			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK,
-					this.distanceType.name());
+			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK, this.distanceType.name());
 		}
 		catch (Exception e) {
 			logger.error(e.toString());
@@ -215,19 +214,19 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	List<VectorData> similaritySearchByMetrics(String vectortab, List<Double> vector, int topK,
 			String distance_metrics_func) throws SQLException {
 		List<VectorData> results = new ArrayList<>();
-		double[] doubleVector = new double[vector.size()];
+		float[] floatVector = new float[vector.size()];
 		for (int i = 0; i < vector.size(); i++) {
-			doubleVector[i] = vector.get(i);
+			floatVector[i] = vector.get(i).floatValue();
 		}
 
 		try {
 
 			String similaritySql = "select id, embeddings, metadata, text from " + vectortab + " order by "
-					+  "vector_distance(embeddings, ?, " + distance_metrics_func + ")" + " fetch first ? rows only";
+					+ "vector_distance(embeddings, ?, " + distance_metrics_func + ")" + " fetch first ? rows only";
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
-					ps.setObject(1, doubleVector, OracleType.VECTOR);
+					ps.setObject(1, floatVector, OracleType.VECTOR);
 					ps.setObject(2, topK, OracleType.NUMBER);
 				}
 			}, new RowMapper<VectorData>() {
@@ -252,7 +251,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		if (removeExistingVectorStoreTable) {
 			try {
 				logger.debug("Dropping table " + this.VECTOR_TABLE + " because removeExistingVectorStoreTable = true.");
-			
+
 				jdbcTemplate.execute(String.format("""
 						        begin
 						          execute immediate 'drop table %s cascade constraints';
@@ -263,35 +262,36 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 						            end if;
 						        end;
 						""", this.VECTOR_TABLE));
-			} catch (Exception e) {
+			}
+			catch (Exception e) {
 				logger.error("Error dropping table " + this.VECTOR_TABLE + " \n" + e.getMessage());
 				throw (e);
 			}
 		}
 
-        try {
-            this.jdbcTemplate.execute(String.format("""
-                            begin
-                                execute immediate 'create table %s (
-                                id number generated as identity,
-                                text clob,
-                                embeddings vector,
-                                metadata json,
-                                primary key (id))';
-                            exception
-                                when others then
-                                if sqlcode != -942 then
-                                    raise;
-                                end if;
-                            end;
-                    """, this.VECTOR_TABLE));
-            logger.debug("Create table " + this.VECTOR_TABLE);
-        }
-        catch (Exception e) {
-            logger.error("Error creating table\n" + e.getMessage());
-            throw (e);
-        }
-		
+		try {
+			this.jdbcTemplate.execute(String.format("""
+					        begin
+					            execute immediate 'create table %s (
+					            id number generated as identity,
+					            text clob,
+					            embeddings vector,
+					            metadata json,
+					            primary key (id))';
+					        exception
+					            when others then
+					            if sqlcode != -942 then
+					                raise;
+					            end if;
+					        end;
+					""", this.VECTOR_TABLE));
+			logger.debug("Create table " + this.VECTOR_TABLE);
+		}
+		catch (Exception e) {
+			logger.error("Error creating table\n" + e.getMessage());
+			throw (e);
+		}
+
 		return;
 	}
 
