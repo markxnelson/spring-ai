@@ -27,7 +27,7 @@ public class VectorData {
 
 	private String id;
 
-	private float[] embeddings;
+	private double[] embeddings;
 
 	private String text;
 
@@ -50,7 +50,7 @@ public class VectorData {
 	}
 
 	// Constructor
-	public VectorData(String id, float[] embeddings, String text, OracleJsonObject metadata) {
+	public VectorData(String id, double[] embeddings, String text, OracleJsonObject metadata) {
 		this.id = id;
 		this.embeddings = embeddings;
 		this.metadata = metadata;
@@ -66,11 +66,11 @@ public class VectorData {
 		this.id = id;
 	}
 
-	public float[] getEmbeddings() {
+	public double[] getEmbeddings() {
 		return embeddings;
 	}
 
-	public void setEmbeddings(float[] embeddings) {
+	public void setEmbeddings(double[] embeddings) {
 		this.embeddings = embeddings;
 	}
 
