@@ -30,11 +30,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.util.StringUtils;
 
 //Oracle DB
 import oracle.jdbc.OracleType;
@@ -56,6 +58,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	public static final int INVALID_EMBEDDING_DIMENSION = -1;
 
 	public String VECTOR_TABLE = "vector_store";
+
+	public final FilterExpressionConverter filterExpressionConverter = new OracleFilterExpressionConverter();
 
 	public int BATCH_SIZE = 100;
 
@@ -191,8 +195,18 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		int topK = request.getTopK();
 
+		String nativeFilterExpression = (request.getFilterExpression() != null)
+				? this.filterExpressionConverter.convertExpression(request.getFilterExpression()) : "";
+
+		String jsonPathFilter = "";
+
+		if (StringUtils.hasText(nativeFilterExpression)) {
+			jsonPathFilter = " where json_exists(metadata, '$?(" + nativeFilterExpression + ")') ";
+		}
+
 		try {
-			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK, this.distanceType.name());
+			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK, this.distanceType.name(),
+					jsonPathFilter);
 		}
 		catch (Exception e) {
 			logger.error(e.toString());
@@ -218,7 +232,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	}
 
 	List<VectorData> similaritySearchByMetrics(String vectortab, List<Double> vector, int topK,
-			String distance_metrics_func) throws SQLException {
+			String distance_metrics_func, String jsonPathFilter) throws SQLException {
 		List<VectorData> results = new ArrayList<>();
 		float[] floatVector = new float[vector.size()];
 		for (int i = 0; i < vector.size(); i++) {
@@ -228,12 +242,13 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		try {
 
 			String similaritySql = String.format("""
-							select id, embeddings, metadata, text, vector_distance(embeddings, ?, %s)
-							distance
+							select id, embeddings, metadata, text,
+							vector_distance(embeddings, ?, %s) distance
 							from %s
+							%s
 							order by distance
 							fetch first ? rows only
-					""", distance_metrics_func, vectortab);
+					""", distance_metrics_func, vectortab, jsonPathFilter);
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {

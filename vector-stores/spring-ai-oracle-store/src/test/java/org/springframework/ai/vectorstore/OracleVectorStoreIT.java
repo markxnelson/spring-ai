@@ -24,6 +24,7 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+import org.junit.Assert;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -31,6 +32,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.vectorstore.OracleVectorStoreIT.TestApplication;
+import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser.FilterExpressionParseException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -107,13 +110,9 @@ public class OracleVectorStoreIT {
 				List<Document> results = vectorStore
 					.similaritySearch(SearchRequest.query("What is Great Depression").withTopK(1));
 
-				System.out.println("RESULTS:\n" + results.toString());
-
 				assertThat(results).hasSize(1);
 				Document resultDoc = results.get(0);
 				assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
-				assertThat(resultDoc.getContent()
-					.contains("It was the longest, deepest, and most widespread depression of the 20th century."));
 				assertThat(resultDoc.getMetadata()).containsKeys("meta2", "distance");
 
 				// Remove all documents from the store
@@ -123,6 +122,80 @@ public class OracleVectorStoreIT {
 					.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
 				assertThat(results2).hasSize(0);
 
+				dropTable(context);
+			});
+	}
+
+	@ParameterizedTest(name = "{0} : {displayName} ")
+	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN", "MANHATTAN" })
+	public void searchWithFilters(String distanceType) {
+
+		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
+			.run(context -> {
+
+				VectorStore vectorStore = context.getBean(VectorStore.class);
+
+				var bgDocument = new Document("The World is Big and Salvation Lurks Around the Corner",
+						Map.of("country", "BG", "year", 2020, "foo bar 1", "bar.foo"));
+				var nlDocument = new Document("The World is Big and Salvation Lurks Around the Corner",
+						Map.of("country", "NL"));
+				var bgDocument2 = new Document("The World is Big and Salvation Lurks Around the Corner",
+						Map.of("country", "BG", "year", 2023));
+
+				vectorStore.add(List.of(bgDocument, nlDocument, bgDocument2));
+
+				SearchRequest searchRequest = SearchRequest.query("The World").withTopK(5).withSimilarityThresholdAll();
+
+				List<Document> results = vectorStore.similaritySearch(searchRequest);
+
+				assertThat(results).hasSize(3);
+
+				results = vectorStore.similaritySearch(searchRequest.withFilterExpression("country == 'NL'"));
+
+				assertThat(results).hasSize(1);
+				assertThat(results.get(0).getId()).isEqualTo(nlDocument.getId());
+
+				results = vectorStore.similaritySearch(searchRequest.withFilterExpression("country == 'BG'"));
+
+				assertThat(results).hasSize(2);
+				assertThat(results.get(0).getId()).isIn(bgDocument.getId(), bgDocument2.getId());
+				assertThat(results.get(1).getId()).isIn(bgDocument.getId(), bgDocument2.getId());
+
+				results = vectorStore
+					.similaritySearch(searchRequest.withFilterExpression("country == 'BG' && year == 2020"));
+
+				assertThat(results).hasSize(1);
+				assertThat(results.get(0).getId()).isEqualTo(bgDocument.getId());
+
+				results = vectorStore.similaritySearch(
+						searchRequest.withFilterExpression("(country == 'BG' && year == 2020) || (country == 'NL')"));
+
+				assertThat(results).hasSize(2);
+				assertThat(results.get(0).getId()).isIn(bgDocument.getId(), nlDocument.getId());
+				assertThat(results.get(1).getId()).isIn(bgDocument.getId(), nlDocument.getId());
+
+				results = vectorStore.similaritySearch(searchRequest
+					.withFilterExpression("NOT((country == 'BG' && year == 2020) || (country == 'NL'))"));
+
+				assertThat(results).hasSize(1);
+				assertThat(results.get(0).getId()).isEqualTo(bgDocument2.getId());
+
+				results = vectorStore.similaritySearch(SearchRequest.query("The World")
+					.withTopK(5)
+					.withSimilarityThresholdAll()
+					.withFilterExpression("\"foo bar 1\" == 'bar.foo'"));
+				assertThat(results).hasSize(1);
+				assertThat(results.get(0).getId()).isEqualTo(bgDocument.getId());
+
+				try {
+					vectorStore.similaritySearch(searchRequest.withFilterExpression("country == NL"));
+					Assert.fail("Invalid filter expression should have been cached!");
+				}
+				catch (FilterExpressionParseException e) {
+					assertThat(e.getMessage()).contains("Line: 1:17, Error: no viable alternative at input 'NL'");
+				}
+
+				// Remove all documents from the store
 				dropTable(context);
 			});
 	}
