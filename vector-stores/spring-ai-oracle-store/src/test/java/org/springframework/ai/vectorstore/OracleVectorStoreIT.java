@@ -19,8 +19,10 @@ import static org.junit.Assert.assertThat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import javax.sql.DataSource;
 
@@ -196,6 +198,46 @@ public class OracleVectorStoreIT {
 				}
 
 				// Remove all documents from the store
+				dropTable(context);
+			});
+	}
+
+	@ParameterizedTest(name = "{0} : {displayName} ")
+	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN", "MANHATTAN" })
+	public void documentUpdate(String distanceType) {
+
+		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
+			.run(context -> {
+
+				VectorStore vectorStore = context.getBean(VectorStore.class);
+
+				Document document = new Document(UUID.randomUUID().toString(), "Spring AI rocks!!",
+						Collections.singletonMap("meta1", "meta1"));
+
+				vectorStore.add(List.of(document));
+
+				List<Document> results = vectorStore.similaritySearch(SearchRequest.query("Spring").withTopK(5));
+
+				assertThat(results).hasSize(1);
+				Document resultDoc = results.get(0);
+				assertThat(resultDoc.getId()).isEqualTo(document.getId());
+				assertThat(resultDoc.getContent()).isEqualTo("Spring AI rocks!!");
+				assertThat(resultDoc.getMetadata()).containsKeys("meta1", "distance");
+
+				Document sameIdDocument = new Document(document.getId(),
+						"The World is Big and Salvation Lurks Around the Corner",
+						Collections.singletonMap("meta2", "meta2"));
+
+				vectorStore.add(List.of(sameIdDocument));
+
+				results = vectorStore.similaritySearch(SearchRequest.query("FooBar").withTopK(5));
+
+				assertThat(results).hasSize(1);
+				resultDoc = results.get(0);
+				assertThat(resultDoc.getId()).isEqualTo(document.getId());
+				assertThat(resultDoc.getContent()).isEqualTo("The World is Big and Salvation Lurks Around the Corner");
+				assertThat(resultDoc.getMetadata()).containsKeys("meta2", "distance");
+
 				dropTable(context);
 			});
 	}
