@@ -15,6 +15,7 @@
  */
 package org.springframework.ai.vectorstore;
 
+import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -205,6 +206,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			for (String key : metadata.keySet()) {
 				map.put(key, metadata.get(key).toString().replaceAll("\"", ""));
 			}
+			// add distance to the metadata map
+			map.put("distance", d.getDistance());
 			System.out.println("Metadata map: " + map);
 			Document doc = new Document(d.getId(), d.getText(), map);
 			documents.add(doc);
@@ -224,8 +227,13 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		try {
 
-			String similaritySql = "select id, embeddings, metadata, text from " + vectortab + " order by "
-					+ "vector_distance(embeddings, ?, " + distance_metrics_func + ")" + " fetch first ? rows only";
+			String similaritySql = String.format("""
+							select id, embeddings, metadata, text, vector_distance(embeddings, ?, %s)
+							distance
+							from %s
+							order by distance
+							fetch first ? rows only
+					""", distance_metrics_func, vectortab);
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
@@ -235,7 +243,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			}, new RowMapper<VectorData>() {
 				public VectorData mapRow(ResultSet rs, int rowNum) throws SQLException {
 					return new VectorData(rs.getString("id"), rs.getObject("embeddings", double[].class),
-							rs.getObject("text", String.class), rs.getObject("metadata", OracleJsonObject.class));
+							rs.getObject("text", String.class), rs.getObject("metadata", OracleJsonObject.class),
+							((BigDecimal) rs.getObject("distance", BigDecimal.class)).doubleValue());
 				}
 			});
 

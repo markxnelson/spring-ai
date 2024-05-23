@@ -115,8 +115,7 @@ public class OracleVectorStoreIT {
 				assertThat(resultDoc.getContent()
 					.contains("It was the longest, deepest, and most widespread depression of the 20th century."));
 				// need to research what distance is - test expects it to be added?
-				assertThat(resultDoc.getMetadata()).containsKeys("meta2"); // ,
-																			// "distance");
+				assertThat(resultDoc.getMetadata()).containsKeys("meta2", "distance");
 
 				// Remove all documents from the store
 				vectorStore.delete(documents.stream().map(doc -> doc.getId()).toList());
