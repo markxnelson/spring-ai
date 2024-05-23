@@ -201,8 +201,9 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			OracleJsonObject metadata = d.getMetadata();
 			Map<String, Object> map = new HashMap<>();
 			for (String key : metadata.keySet()) {
-				map.put(key, metadata.get(key).toString());
+				map.put(key, metadata.get(key).toString().replaceAll("\"", ""));
 			}
+			System.out.println("Metadata map: " + map);
 			Document doc = new Document(d.getText(), map);
 			documents.add(doc);
 
