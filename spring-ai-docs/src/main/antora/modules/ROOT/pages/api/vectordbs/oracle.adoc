@@ -1,0 +1,199 @@
+= Oracle
+
+This section walks you through setting up the Oracle `VectorStore` to store document embeddings and perform similarity searches.
+
+link:https://www.oracle.com/database/ai-vector-search/[Oracle AI Vector Search] allows you to search structured and unstructured data based on its semantics or meaning, in additon to its values. It enables storing, indexing and searching over machine learning-generated embeddings. It provides capabilities that let users identify both exact and approximate nearest neighbors. It is designed to work seamlessly with other ORacle features, including indexing, querying, sharding and clustering.
+
+== Prerequisites
+
+First you need access to an Oracle 23ai instance.  Any edition, including link:https://www.oracle.com/database/free/[Oracle Database 23ai Free] can be used.
+
+
+On startup, the `OracleVectorStore` will create the required `vector_store` table with an index.
+
+Next if required, an API key for the xref:api/embeddings.adoc#available-implementations[EmbeddingModel] to generate the embeddings stored by the `OracleVectorStore`.
+
+== Auto-Configuration
+
+Then add the OracleVectorStore boot starter dependency to your project:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.ai</groupId>
+	<artifactId>spring-ai-oracle-store-spring-boot-starter</artifactId>
+</dependency>
+----
+
+or to your Gradle `build.gradle` build file.
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.springframework.ai:spring-ai-oracle-store-spring-boot-starter'
+}
+----
+
+The Vector Store, also requires an `EmbeddingModel` instance to calculate embeddings for the documents.
+You can pick one of the available xref:api/embeddings.adoc#available-implementations[EmbeddingModel Implementations].
+
+For example to use the xref:api/embeddings/openai-embeddings.adoc[OpenAI EmbeddingModel] add the following dependency to your project:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.ai</groupId>
+	<artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+</dependency>
+----
+
+or to your Gradle `build.gradle` build file.
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter'
+}
+----
+
+TIP: Refer to the xref:getting-started.adoc#dependency-management[Dependency Management] section to add the Spring AI BOM to your build file.
+Refer to the xref:getting-started.adoc#repositories[Repositories] section to add Milestone and/or Snapshot Repositories to your build file.
+
+To connect to and configure the `OracleVectorStore`, you need to provide access details for your instance.
+A simple configuration can either be provided via Spring Boot's `application.yml`
+
+[yml]
+----
+spring:
+  datasource:
+    url: jdbc:oracle:thin://@localhost:1521/freepdb1
+    username: testuser
+    password: testpwd
+  ai:
+	vectorstore:
+	  oracle:
+		  index-type: HNSW
+		  distance-type: COSINE
+		  dimensions: 1536
+----
+
+TIP: Check the list of xref:#oracle-vector-properties[configuration parameters] to learn about the default values and configuration options.
+
+Now you can Auto-wire the Oracle Vector Store in your application and use it
+
+[source,java]
+----
+@Autowired VectorStore vectorStore;
+
+// ...
+
+List <Document> documents = List.of(
+    new Document("Spring AI rocks!! Spring AI rocks!! Spring AI rocks!! Spring AI rocks!! Spring AI rocks!!", Map.of("meta1", "meta1")),
+    new Document("The World is Big and Salvation Lurks Around the Corner"),
+    new Document("You walk forward facing the past and you turn back toward the future.", Map.of("meta2", "meta2")));
+
+// Add the documents to PGVector
+vectorStore.add(List.of(document));
+
+// Retrieve documents similar to a query
+List<Document> results = vectorStore.similaritySearch(SearchRequest.query("Spring").withTopK(5));
+----
+
+[[oracle-vector-properties]]
+=== Configuration properties
+
+You can use the following properties in your Spring Boot configuration to customize the PGVector vector store.
+
+[cols="2,5,1"]
+|===
+|Property| Description | Default value
+
+|`spring.ai.vectorstore.oracle.index-type`|  Nearest neighbor search index type. Options are `NONE` - exact nearest neighbor search, `IVF` - Inverted File Flat (IVF) is a form of Neighbor Partition Vector index. It is a partition-based index that achieves search efficiency by narrowing the search area through the use of neighbor partitions or clusters. `HNSW` -  A Hierarchical Navigable Small World Graph (HNSW) is a form of In-Memory Neighbor Graph vector index. It is a very efficient index for vector approximate similarity search.| HNSW
+|`spring.ai.vectorstore.oracle.distance-type`| Search distance type. Defaults to `COSINE`. But if vectors are normalized to length 1, you can use `EUCLIDEAN` or `DOT` (negative dot product) for best performance.| COSINE
+|`spring.ai.vectorstore.oracle.dimensions`| Embeddings dimension. If not specified explicitly the OracleVectorStore will retrieve the dimensions form the provided `EmbeddingModel`. Dimensions are set to the embedding column the on table creation. If you change the dimensions your would have to re-create the vector_store table as well. | -
+|`spring.ai.vectorstore.oracle.remove-existing-vector-store-table` | Deletes the existing `vector_store` table on start up.  | false
+
+|===
+
+== Metadata filtering
+
+You can leverage the generic, portable link:https://docs.spring.io/spring-ai/reference/api/vectordbs.html#_metadata_filters[metadata filters] with the OracleVector store.
+
+For example, you can use either the text expression language:
+
+[source,java]
+----
+vectorStore.similaritySearch(
+    SearchRequest.defaults()
+    .withQuery("The World")
+    .withTopK(TOP_K)
+    .withSimilarityThreshold(SIMILARITY_THRESHOLD)
+    .withFilterExpression("author in ['john', 'jill'] && article_type == 'blog'"));
+----
+
+or programmatically using the `Filter.Expression` DSL:
+
+[source,java]
+----
+FilterExpressionBuilder b = new FilterExpressionBuilder();
+
+vectorStore.similaritySearch(SearchRequest.defaults()
+    .withQuery("The World")
+    .withTopK(TOP_K)
+    .withSimilarityThreshold(SIMILARITY_THRESHOLD)
+    .withFilterExpression(b.and(
+        b.in("author","john", "jill"),
+        b.eq("article_type", "blog")).build()));
+----
+
+NOTE: These filter expressions are converted into the equivalent OracleVector filters.
+
+== Manual Configuration
+
+Instead of using the Spring Boot auto-configuration, you can manually configure the `OracleVectorStore`.
+For this you need to add the Oracle connection and `JdbcTemplate` auto-configuration dependencies to your project:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+
+		<dependency>
+			<groupId>com.oracle.database.jdbc</groupId>
+			<artifactId>ojdbc11</artifactId>
+			<version>23.4.0.24.05</version>  <!-- or a later version, if available -->
+		</dependency>
+
+<dependency>
+	<groupId>org.springframework.ai</groupId>
+	<artifactId>spring-ai-oracle-store</artifactId>
+</dependency>
+----
+
+TIP: Refer to the xref:getting-started.adoc#dependency-management[Dependency Management] section to add the Spring AI BOM to your build file.
+
+To configure OracleVector in your application, you can use the following setup:
+
+[source,java]
+----
+@Bean
+public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingModel) {
+	return new OracleVectorStore(jdbcTemplate, embeddingModel);
+}
+----
+
+== Run Oracle locally
+
+----
+docker run --name my23ai -d -p 1521:1521 -e ORACLE_PASSWORD=Welcome12345 gvenzl/oracle-free:23.4-slim-faststart 
+----
+
+You can connect to this server using link:https://www.oracle.com/database/sqldeveloper/technologies/sqlcl/download/[Oracle SQLcl] like this:
+
+----
+sql testuser/testpwd@//localhost:1521/freepdb1
+----
+
+
