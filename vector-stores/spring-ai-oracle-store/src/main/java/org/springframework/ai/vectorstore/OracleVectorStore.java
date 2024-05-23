@@ -53,7 +53,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
 
-	public static final int OPENAI_EMBEDDING_DIMENSION = 1536;
+	public static final int OPENAI_EMBEDDING_DIMENSION_SIZE = 1536;
 
 	public static final int INVALID_EMBEDDING_DIMENSION = -1;
 
@@ -65,7 +65,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private JdbcTemplate jdbcTemplate;
 
-	EmbeddingModel embeddingClient;
+	EmbeddingModel embeddingModel;
 
 	private int dimensions;
 
@@ -96,8 +96,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	public enum OracleDistanceType {
 
-		COSINE("<=>", "COSINE_DISTANCE"), DOT("<#>", "INNER_PRODUCT"), EUCLIDEAN("<->", "L2_DISTANCE"),
-		MANHATTAN(null, "L1_DISTANCE");
+		COSINE("<=>", "COSINE_DISTANCE"), DOT("<#>", "INNER_PRODUCT"), EUCLIDEAN("<->", "L2_DISTANCE");
 
 		public final String operator;
 
@@ -114,10 +113,14 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		this(jdbcTemplate, embeddingClient, INVALID_EMBEDDING_DIMENSION, OracleDistanceType.COSINE, false);
 	}
 
+	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions) {
+		this(jdbcTemplate, embeddingClient, dimensions, OracleDistanceType.COSINE, false);
+	}
+
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions,
 			OracleDistanceType distanceType, boolean removeExistingVectorStoreTable) {
 		this.jdbcTemplate = jdbcTemplate;
-		this.embeddingClient = embeddingClient;
+		this.embeddingModel = embeddingClient;
 		this.dimensions = dimensions;
 		this.distanceType = distanceType;
 		this.removeExistingVectorStoreTable = removeExistingVectorStoreTable;
@@ -149,7 +152,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 					jsonObj.put(entry.getKey(), String.valueOf(entry.getValue()));
 				}
 
-				List<Double> vectorList = embeddingClient.embed(document);
+				List<Double> vectorList = embeddingModel.embed(document);
 				float[] embeddings = new float[vectorList.size()];
 				for (int j = 0; j < vectorList.size(); j++) {
 					embeddings[j] = vectorList.get(j).floatValue();
@@ -195,7 +198,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		logger.debug("Requested query " + request.getQuery());
 
-		List<Double> queryEmbeddings = embeddingClient.embed(request.getQuery());
+		List<Double> queryEmbeddings = embeddingModel.embed(request.getQuery());
 		logger.debug("Embeddings size: " + queryEmbeddings.size());
 
 		logger.debug("Distance metrics: " + this.distanceType);
@@ -336,6 +339,25 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		}
 
 		return;
+	}
+
+	int embeddingDimensions() {
+		// The manually set dimensions have precedence over the computed one.
+		if (this.dimensions > 0) {
+			return this.dimensions;
+		}
+
+		try {
+			int embeddingDimensions = this.embeddingModel.dimensions();
+			if (embeddingDimensions > 0) {
+				return embeddingDimensions;
+			}
+		}
+		catch (Exception e) {
+			logger.warn("Failed to obtain the embedding dimensions from the embedding model and fall backs to default:"
+					+ OPENAI_EMBEDDING_DIMENSION_SIZE);
+		}
+		return OPENAI_EMBEDDING_DIMENSION_SIZE;
 	}
 
 }
