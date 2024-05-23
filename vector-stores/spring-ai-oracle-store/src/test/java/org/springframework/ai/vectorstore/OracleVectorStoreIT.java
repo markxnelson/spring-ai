@@ -111,8 +111,7 @@ public class OracleVectorStoreIT {
 
 				assertThat(results).hasSize(1);
 				Document resultDoc = results.get(0);
-				// this assert does not make sense - it assumes the order incorrectly
-				// assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
+				assertThat(resultDoc.getId()).isEqualTo(documents.get(2).getId());
 				assertThat(resultDoc.getContent()
 					.contains("It was the longest, deepest, and most widespread depression of the 20th century."));
 				// need to research what distance is - test expects it to be added?
@@ -120,14 +119,13 @@ public class OracleVectorStoreIT {
 																			// "distance");
 
 				// Remove all documents from the store
-				// vectorStore.delete(documents.stream().map(doc ->
-				// doc.getId()).toList());
+				vectorStore.delete(documents.stream().map(doc -> doc.getId()).toList());
 
-				// List<Document> results2 = vectorStore
-				// .similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
-				// assertThat(results2).hasSize(0);
+				List<Document> results2 = vectorStore
+					.similaritySearch(SearchRequest.query("Great Depression").withTopK(1));
+				assertThat(results2).hasSize(0);
 
-				// dropTable(context);
+				dropTable(context);
 			});
 	}
 

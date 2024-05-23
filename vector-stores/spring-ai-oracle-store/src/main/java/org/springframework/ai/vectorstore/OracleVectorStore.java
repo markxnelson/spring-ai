@@ -124,12 +124,13 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		int size = documents.size();
 
 		this.jdbcTemplate.batchUpdate(
-				"insert into " + this.VECTOR_TABLE + " (text, embeddings, metadata) values (?,?,?)",
+				"insert into " + this.VECTOR_TABLE + " (id, text, embeddings, metadata) values (?,?,?,?)",
 				new BatchPreparedStatementSetter() {
 					@Override
 					public void setValues(PreparedStatement ps, int i) throws SQLException {
 
 						var document = documents.get(i);
+						var id = document.getId();
 						var text = document.getContent();
 
 						OracleJsonFactory factory = new OracleJsonFactory();
@@ -145,9 +146,10 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 							embeddings[j] = vectorList.get(j).floatValue();
 						}
 
-						ps.setString(1, text);
-						ps.setObject(2, embeddings, OracleType.VECTOR);
-						ps.setObject(3, jsonObj, OracleType.JSON);
+						ps.setString(1, id);
+						ps.setString(2, text);
+						ps.setObject(3, embeddings, OracleType.VECTOR);
+						ps.setObject(4, jsonObj, OracleType.JSON);
 
 					}
 
@@ -204,7 +206,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 				map.put(key, metadata.get(key).toString().replaceAll("\"", ""));
 			}
 			System.out.println("Metadata map: " + map);
-			Document doc = new Document(d.getText(), map);
+			Document doc = new Document(d.getId(), d.getText(), map);
 			documents.add(doc);
 
 		}
@@ -274,7 +276,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			this.jdbcTemplate.execute(String.format("""
 					        begin
 					            execute immediate 'create table %s (
-					            id number generated as identity,
+					            id varchar2(36),
 					            text clob,
 					            embeddings vector,
 					            metadata json,
