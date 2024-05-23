@@ -33,6 +33,8 @@ public class VectorData {
 
 	private OracleJsonObject metadata;
 
+	private double distance;
+
 	public String getText() {
 		return text;
 	}
@@ -50,11 +52,12 @@ public class VectorData {
 	}
 
 	// Constructor
-	public VectorData(String id, double[] embeddings, String text, OracleJsonObject metadata) {
+	public VectorData(String id, double[] embeddings, String text, OracleJsonObject metadata, double distance) {
 		this.id = id;
 		this.embeddings = embeddings;
 		this.metadata = metadata;
 		this.text = text;
+		this.distance = distance;
 	}
 
 	// Getters and Setters
@@ -72,6 +75,14 @@ public class VectorData {
 
 	public void setEmbeddings(double[] embeddings) {
 		this.embeddings = embeddings;
+	}
+
+	public double getDistance() {
+		return distance;
+	}
+
+	public void setDistance(double distance) {
+		this.distance = distance;
 	}
 
 }
