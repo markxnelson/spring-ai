@@ -128,41 +128,49 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		int size = documents.size();
 
-		this.jdbcTemplate.batchUpdate(
-				"insert into " + this.VECTOR_TABLE + " (id, text, embeddings, metadata) values (?,?,?,?)",
-				new BatchPreparedStatementSetter() {
-					@Override
-					public void setValues(PreparedStatement ps, int i) throws SQLException {
+		this.jdbcTemplate.batchUpdate(String.format("""
+				merge into %s
+				using dual
+				on (id = ?)
+				when matched then update set text = ?, embeddings = ?, metadata = ?
+				when not matched then insert (id, text, embeddings, metadata) values (?,?,?,?)
+				""", this.VECTOR_TABLE), new BatchPreparedStatementSetter() {
+			@Override
+			public void setValues(PreparedStatement ps, int i) throws SQLException {
 
-						var document = documents.get(i);
-						var id = document.getId();
-						var text = document.getContent();
+				var document = documents.get(i);
+				var id = document.getId();
+				var text = document.getContent();
 
-						OracleJsonFactory factory = new OracleJsonFactory();
-						OracleJsonObject jsonObj = factory.createObject();
-						Map<String, Object> metaData = document.getMetadata();
-						for (Map.Entry<String, Object> entry : metaData.entrySet()) {
-							jsonObj.put(entry.getKey(), String.valueOf(entry.getValue()));
-						}
+				OracleJsonFactory factory = new OracleJsonFactory();
+				OracleJsonObject jsonObj = factory.createObject();
+				Map<String, Object> metaData = document.getMetadata();
+				for (Map.Entry<String, Object> entry : metaData.entrySet()) {
+					jsonObj.put(entry.getKey(), String.valueOf(entry.getValue()));
+				}
 
-						List<Double> vectorList = embeddingClient.embed(document);
-						float[] embeddings = new float[vectorList.size()];
-						for (int j = 0; j < vectorList.size(); j++) {
-							embeddings[j] = vectorList.get(j).floatValue();
-						}
+				List<Double> vectorList = embeddingClient.embed(document);
+				float[] embeddings = new float[vectorList.size()];
+				for (int j = 0; j < vectorList.size(); j++) {
+					embeddings[j] = vectorList.get(j).floatValue();
+				}
 
-						ps.setString(1, id);
-						ps.setString(2, text);
-						ps.setObject(3, embeddings, OracleType.VECTOR);
-						ps.setObject(4, jsonObj, OracleType.JSON);
+				ps.setString(1, id);
+				ps.setString(2, text);
+				ps.setObject(3, embeddings, OracleType.VECTOR);
+				ps.setObject(4, jsonObj, OracleType.JSON);
+				ps.setString(5, id);
+				ps.setString(6, text);
+				ps.setObject(7, embeddings, OracleType.VECTOR);
+				ps.setObject(8, jsonObj, OracleType.JSON);
 
-					}
+			}
 
-					@Override
-					public int getBatchSize() {
-						return size;
-					}
-				});
+			@Override
+			public int getBatchSize() {
+				return size;
+			}
+		});
 
 	}
 
