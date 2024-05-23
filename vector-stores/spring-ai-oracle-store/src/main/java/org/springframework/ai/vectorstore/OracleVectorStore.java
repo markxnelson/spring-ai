@@ -212,8 +212,10 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			jsonPathFilter = " where json_exists(metadata, '$?(" + nativeFilterExpression + ")') ";
 		}
 
+		double distance = 1 - request.getSimilarityThreshold();
+
 		try {
-			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, topK, this.distanceType.name(),
+			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, distance, topK, this.distanceType.name(),
 					jsonPathFilter);
 		}
 		catch (Exception e) {
@@ -239,7 +241,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	}
 
-	List<VectorData> similaritySearchByMetrics(String vectortab, List<Double> vector, int topK,
+	List<VectorData> similaritySearchByMetrics(String vectortab, List<Double> vector, double distance, int topK,
 			String distance_metrics_func, String jsonPathFilter) throws SQLException {
 		List<VectorData> results = new ArrayList<>();
 		float[] floatVector = new float[vector.size()];
@@ -247,21 +249,27 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			floatVector[i] = vector.get(i).floatValue();
 		}
 
+		System.out.println("DISTANCE = " + distance);
+
 		try {
 
 			String similaritySql = String.format("""
-							select id, embeddings, metadata, text,
-							vector_distance(embeddings, ?, %s) distance
-							from %s
-							%s
-							order by distance
+							select * from (
+								select id, embeddings, metadata, text,
+								vector_distance(embeddings, ?, %s) distance
+								from %s
+								%s
+								order by distance
+							)
+							where distance <= ?
 							fetch first ? rows only
 					""", distance_metrics_func, vectortab, jsonPathFilter);
 
 			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
 				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
 					ps.setObject(1, floatVector, OracleType.VECTOR);
-					ps.setObject(2, topK, OracleType.NUMBER);
+					ps.setObject(2, distance, OracleType.NUMBER);
+					ps.setObject(3, topK, OracleType.NUMBER);
 				}
 			}, new RowMapper<VectorData>() {
 				public VectorData mapRow(ResultSet rs, int rowNum) throws SQLException {

@@ -20,6 +20,7 @@ import static org.junit.Assert.assertThat;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +49,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.util.CollectionUtils;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.oracle.OracleContainer;
@@ -240,6 +242,64 @@ public class OracleVectorStoreIT {
 
 				dropTable(context);
 			});
+	}
+
+	@ParameterizedTest(name = "{0} : {displayName} ")
+	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN", "MANHATTAN" })
+	public void searchWithThreshold(String distanceType) {
+
+		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
+			.run(context -> {
+
+				VectorStore vectorStore = context.getBean(VectorStore.class);
+
+				vectorStore.add(documents);
+
+				List<Document> fullResult = vectorStore
+					.similaritySearch(SearchRequest.query("Time Shelter").withTopK(5).withSimilarityThresholdAll());
+
+				assertThat(fullResult).hasSize(3);
+
+				assertThat(isSortedByDistance(fullResult)).isTrue();
+
+				List<Float> distances = fullResult.stream()
+					.map(doc -> (Float) ((Double) doc.getMetadata().get("distance")).floatValue())
+					.toList();
+
+				float threshold = (distances.get(0) + distances.get(1)) / 2;
+				System.out.println("THRESHOLD = " + threshold);
+
+				List<Document> results = vectorStore.similaritySearch(
+						SearchRequest.query("Time Shelter").withTopK(5).withSimilarityThreshold(1 - threshold));
+
+				assertThat(results).hasSize(1);
+				Document resultDoc = results.get(0);
+				assertThat(resultDoc.getId()).isEqualTo(documents.get(1).getId());
+
+				dropTable(context);
+			});
+	}
+
+	private static boolean isSortedByDistance(List<Document> docs) {
+
+		List<Float> distances = docs.stream()
+			.map(doc -> (Float) ((Double) doc.getMetadata().get("distance")).floatValue())
+			.toList();
+
+		if (CollectionUtils.isEmpty(distances) || distances.size() == 1) {
+			return true;
+		}
+
+		Iterator<Float> iter = distances.iterator();
+		Float current, previous = iter.next();
+		while (iter.hasNext()) {
+			current = iter.next();
+			if (previous > current) {
+				return false;
+			}
+			previous = current;
+		}
+		return true;
 	}
 
 	@SpringBootConfiguration
