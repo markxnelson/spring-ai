@@ -32,6 +32,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementSetter;
@@ -53,6 +54,10 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
 
+	public static final byte DEFAULT_ACCURACY = 90;
+
+	public static final OracleIndexType DEFAULT_INDEX_TYPE = OracleIndexType.NONE;
+
 	public static final int OPENAI_EMBEDDING_DIMENSION_SIZE = 1536;
 
 	public static final int INVALID_EMBEDDING_DIMENSION = -1;
@@ -72,6 +77,10 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	private OracleDistanceType distanceType;
 
 	private boolean removeExistingVectorStoreTable;
+
+	private OracleIndexType indexType;
+
+	private byte accuracy;
 
 	public enum OracleIndexType {
 
@@ -110,20 +119,30 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	}
 
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
-		this(jdbcTemplate, embeddingClient, INVALID_EMBEDDING_DIMENSION, OracleDistanceType.COSINE, false);
+		this(jdbcTemplate, embeddingClient, INVALID_EMBEDDING_DIMENSION, OracleDistanceType.COSINE, false,
+				DEFAULT_INDEX_TYPE, DEFAULT_ACCURACY);
 	}
 
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions) {
-		this(jdbcTemplate, embeddingClient, dimensions, OracleDistanceType.COSINE, false);
+		this(jdbcTemplate, embeddingClient, dimensions, OracleDistanceType.COSINE, false, DEFAULT_INDEX_TYPE,
+				DEFAULT_ACCURACY);
 	}
 
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions,
-			OracleDistanceType distanceType, boolean removeExistingVectorStoreTable) {
+			OracleDistanceType distanceType, boolean removeExistingVectorStoreTable, OracleIndexType indexType,
+			byte accuracy) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.embeddingModel = embeddingClient;
 		this.dimensions = dimensions;
 		this.distanceType = distanceType;
 		this.removeExistingVectorStoreTable = removeExistingVectorStoreTable;
+		this.indexType = indexType;
+		if (accuracy < 0 || accuracy > 100) {
+			logger.warn("Invalid accuracy value provided, falling back to default value.");
+			this.accuracy = DEFAULT_ACCURACY;
+		} else {
+			this.accuracy = accuracy;
+		}
 	}
 
 	@Override
@@ -336,6 +355,39 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		catch (Exception e) {
 			logger.error("Error creating table\n" + e.getMessage());
 			throw (e);
+		}
+
+		if (indexType != OracleIndexType.NONE) {
+			String indexTypeSQL = switch (indexType) {
+				case HNSW -> "ORGANIZATION INMEMORY NEIGHBOR GRAPH";
+				case IVF -> "ORGANIZATION NEIGHBOR PARTITIONS";
+				default -> "";
+			};
+			try {
+				String createVectorIndexStatement = String.format("""
+						CREATE VECTOR INDEX %s_%s_idx ON %s ( embeddings ) 
+									%s
+									WITH DISTANCE %s
+									WITH TARGET ACCURACY %d
+									""",
+						indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(),VECTOR_TABLE,
+						indexTypeSQL,
+						distanceType,
+						accuracy);
+				this.jdbcTemplate.execute(String.format("""
+					        begin
+					            execute immediate '%s';
+					        exception
+					            when others then
+					            if sqlcode != -942 then
+					                raise;
+					            end if;
+					        end;
+					""", createVectorIndexStatement));
+			} catch (DataAccessException e) {
+				logger.error("Error creating index\n" + e.getMessage());
+				throw (e);
+			}
 		}
 
 		return;

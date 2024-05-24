@@ -314,7 +314,8 @@ public class OracleVectorStoreIT {
 		@Bean
 		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 			return new OracleVectorStore(jdbcTemplate, embeddingClient,
-					OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE, distanceType, true);
+					OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE, distanceType, true,
+					OracleVectorStore.DEFAULT_INDEX_TYPE, OracleVectorStore.DEFAULT_ACCURACY);
 		}
 
 		@Bean
