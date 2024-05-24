@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.springframework.ai.chat;
+package org.springframework.ai.chat.client;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -29,6 +29,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -161,6 +165,7 @@ public class ChatClientTest {
 		assertThat(systemMessage.getContent()).isEqualTo("Default system text value1New, value2");
 		assertThat(systemMessage.getMessageType()).isEqualTo(MessageType.SYSTEM);
 
+		// streaming
 		content = join(chatClient.prompt()
 				.system(s -> s.param("param1", "value1New"))
 				.stream().content());
