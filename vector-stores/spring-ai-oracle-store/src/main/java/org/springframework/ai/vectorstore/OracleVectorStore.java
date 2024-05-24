@@ -52,11 +52,11 @@ import oracle.sql.json.OracleJsonObject;
  */
 public class OracleVectorStore implements VectorStore, InitializingBean {
 
+	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
+	
 	public static final byte DEFAULT_ACCURACY = 90;
 
 	public static final OracleIndexType DEFAULT_INDEX_TYPE = OracleIndexType.NONE;
-
-	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
 
 	public static final int OPENAI_EMBEDDING_DIMENSION_SIZE = 1536;
 
