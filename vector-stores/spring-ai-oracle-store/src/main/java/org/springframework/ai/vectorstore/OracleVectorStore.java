@@ -53,7 +53,7 @@ import oracle.sql.json.OracleJsonObject;
 public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
-	
+
 	public static final byte DEFAULT_ACCURACY = 90;
 
 	public static final OracleIndexType DEFAULT_INDEX_TYPE = OracleIndexType.NONE;
@@ -374,16 +374,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 						indexTypeSQL,
 						distanceType,
 						accuracy);
-				this.jdbcTemplate.execute(String.format("""
-					        begin
-					            execute immediate '%s';
-					        exception
-					            when others then
-					            if sqlcode != -942 then
-					                raise;
-					            end if;
-					        end;
-					""", createVectorIndexStatement));
+				this.jdbcTemplate.execute(createVectorIndexStatement);
 			} catch (DataAccessException e) {
 				logger.error("Error creating index\n" + e.getMessage());
 				throw (e);
