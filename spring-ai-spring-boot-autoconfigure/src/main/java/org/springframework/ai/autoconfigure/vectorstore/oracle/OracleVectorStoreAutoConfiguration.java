@@ -27,6 +27,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
+/**
+ * @author Fernanda Meheust
+ */
 @AutoConfiguration(after = JdbcTemplateAutoConfiguration.class)
 @ConditionalOnClass({ OracleVectorStore.class, DataSource.class, JdbcTemplate.class })
 @EnableConfigurationProperties(OracleVectorStoreProperties.class)

@@ -53,7 +53,7 @@ import oracle.sql.json.OracleJsonObject;
 public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(OracleVectorStore.class);
-	
+
 	public static final byte DEFAULT_ACCURACY = 90;
 
 	public static final OracleIndexType DEFAULT_INDEX_TYPE = OracleIndexType.NONE;
@@ -140,7 +140,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		if (accuracy < 0 || accuracy > 100) {
 			logger.warn("Invalid accuracy value provided, falling back to default value.");
 			this.accuracy = DEFAULT_ACCURACY;
-		} else {
+		}
+		else {
 			this.accuracy = accuracy;
 		}
 	}
@@ -365,26 +366,24 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			};
 			try {
 				String createVectorIndexStatement = String.format("""
-						CREATE VECTOR INDEX %s_%s_idx ON %s ( embeddings ) 
+						CREATE VECTOR INDEX %s_%s_idx ON %s ( embeddings )
 									%s
 									WITH DISTANCE %s
 									WITH TARGET ACCURACY %d
-									""",
-						indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(),VECTOR_TABLE,
-						indexTypeSQL,
-						distanceType,
-						accuracy);
+									""", indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(), VECTOR_TABLE,
+						indexTypeSQL, distanceType, accuracy);
 				this.jdbcTemplate.execute(String.format("""
-					        begin
-					            execute immediate '%s';
-					        exception
-					            when others then
-					            if sqlcode != -942 then
-					                raise;
-					            end if;
-					        end;
-					""", createVectorIndexStatement));
-			} catch (DataAccessException e) {
+						        begin
+						            execute immediate '%s';
+						        exception
+						            when others then
+						            if sqlcode != -942 then
+						                raise;
+						            end if;
+						        end;
+						""", createVectorIndexStatement));
+			}
+			catch (DataAccessException e) {
 				logger.error("Error creating index\n" + e.getMessage());
 				throw (e);
 			}
