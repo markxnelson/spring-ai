@@ -47,54 +47,60 @@ import javax.sql.DataSource;
  */
 @Testcontainers
 public class OracleVectorStoreAutoConfigurationIT {
+
 	private static final ContextConsumer<ApplicationContext> testDistanceTypeIsSet = (context -> {
 		VectorStore vectorStore = context.getBean(VectorStore.class);
 		JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
 		List<Document> results = vectorStore
-				.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
+			.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
 		String expectedValue = context.getEnvironment().getProperty("expected-value").toString();
 
-		Mockito.verify(jdbcTemplate).query(Mockito.contains(expectedValue), Mockito.any(PreparedStatementSetter.class), Mockito.any(RowMapper.class));
+		Mockito.verify(jdbcTemplate)
+			.query(Mockito.contains(expectedValue), Mockito.any(PreparedStatementSetter.class),
+					Mockito.any(RowMapper.class));
 	});
 
 	@ParameterizedTest
-	@ValueSource(strings = {"COSINE", "DOT", "EUCLIDEAN"})
+	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN" })
 	public void testAutoConfigDistanceType(String distanceType) {
 		ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-				.withPropertyValues(String.format("spring.ai.vectorstore.oracle.distanceType=%s", distanceType),
-						"spring.ai.vectorstore.oracle.removeExistingVectorStoreTable=false")
-				.withUserConfiguration(JdbcTemplateMockApplication.class)
-				.withConfiguration(AutoConfigurations.of(OracleVectorStoreAutoConfiguration.class));
+			.withPropertyValues(String.format("spring.ai.vectorstore.oracle.distanceType=%s", distanceType),
+					"spring.ai.vectorstore.oracle.removeExistingVectorStoreTable=false")
+			.withUserConfiguration(JdbcTemplateMockApplication.class)
+			.withConfiguration(AutoConfigurations.of(OracleVectorStoreAutoConfiguration.class));
 
 		contextRunner.run(context -> {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
 			List<Document> results = vectorStore
-					.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
+				.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
 
-			Mockito.verify(jdbcTemplate).query(Mockito.contains(distanceType), Mockito.any(PreparedStatementSetter.class), Mockito.any(RowMapper.class));
+			Mockito.verify(jdbcTemplate)
+				.query(Mockito.contains(distanceType), Mockito.any(PreparedStatementSetter.class),
+						Mockito.any(RowMapper.class));
 		});
 	}
 
 	@ParameterizedTest
-	@CsvSource( {"NONE,NONE", "HNSW,INMEMORY", "IVF,PARTITIONS"})
+	@CsvSource({ "NONE,NONE", "HNSW,INMEMORY", "IVF,PARTITIONS" })
 	public void testAutoConfigIndexType(String indexType, String expectedText) {
 		ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-				.withPropertyValues(String.format("spring.ai.vectorstore.oracle.indexType=%s", indexType),
-						"spring.ai.vectorstore.oracle.distanceType=DOT",
-						"spring.ai.vectorstore.oracle.removeExistingVectorStoreTable=false")
-				.withUserConfiguration(JdbcTemplateMockApplication.class)
-				.withConfiguration(AutoConfigurations.of(OracleVectorStoreAutoConfiguration.class));
+			.withPropertyValues(String.format("spring.ai.vectorstore.oracle.indexType=%s", indexType),
+					"spring.ai.vectorstore.oracle.distanceType=DOT",
+					"spring.ai.vectorstore.oracle.removeExistingVectorStoreTable=false")
+			.withUserConfiguration(JdbcTemplateMockApplication.class)
+			.withConfiguration(AutoConfigurations.of(OracleVectorStoreAutoConfiguration.class));
 
 		contextRunner.run(context -> {
 			VectorStore vectorStore = context.getBean(VectorStore.class);
 			JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
 			List<Document> results = vectorStore
-					.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
+				.similaritySearch(SearchRequest.query("What is Great Depression?").withTopK(1));
 
 			if (expectedText.equals("NONE")) {
 				Mockito.verify(jdbcTemplate, Mockito.atMostOnce()).execute(Mockito.anyString());
-			} else {
+			}
+			else {
 				Mockito.verify(jdbcTemplate).execute(Mockito.contains(expectedText));
 				Mockito.verify(jdbcTemplate, Mockito.times(2)).execute(Mockito.anyString());
 			}
@@ -108,13 +114,15 @@ public class OracleVectorStoreAutoConfigurationIT {
 		public DataSource myDataSource() {
 			return Mockito.mock(DataSource.class);
 		}
+
 		@Bean
 		public JdbcTemplate myJdbcTemplate(DataSource dataSource) {
 
 			return Mockito.mock(JdbcTemplate.class);
 		}
 
-		@Bean EmbeddingModel myEmbeddingModel() {
+		@Bean
+		EmbeddingModel myEmbeddingModel() {
 			return Mockito.mock(EmbeddingModel.class);
 		}
 

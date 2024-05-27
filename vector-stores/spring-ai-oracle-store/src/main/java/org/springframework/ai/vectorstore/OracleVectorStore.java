@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLSyntaxErrorException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -105,29 +106,68 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	public enum OracleDistanceType {
 
-		COSINE("<=>", "COSINE_DISTANCE"), DOT("<#>", "INNER_PRODUCT"), EUCLIDEAN("<->", "L2_DISTANCE");
-
-		public final String operator;
-
-		public final String shorthandFunction;
-
-		OracleDistanceType(String operator, String shorthandFunction) {
-			this.operator = operator;
-			this.shorthandFunction = shorthandFunction;
-		}
+		/**
+		 * One of the most widely used similarity metric, especially in natural language
+		 * processing (NLP), is cosine similarity, which measures the cosine of the angle
+		 * between two vectors.
+		 */
+		COSINE,
+		/**
+		 * The dot product similarity of two vectors can be viewed as multiplying the size
+		 * of each vector by the cosine of their angle. The corresponding geometrical
+		 * interpretation of this definition is equivalent to multiplying the size of one
+		 * of the vectors by the size of the projection of the second vector onto the
+		 * first one, or vice versa.
+		 */
+		DOT,
+		/**
+		 * Euclidean distance reflects the distance between each of the vectors'
+		 * coordinates being compared—basically the straight-line distance between two
+		 * vectors. This is calculated using the Pythagorean theorem applied to the
+		 * vector's coordinates.
+		 */
+		EUCLIDEAN
 
 	}
 
+	/**
+	 * Creates an OracleVectorStore
+	 * @param jdbcTemplate JdbcTemplate bean used to access the underlying database
+	 * @param embeddingClient EmbeddingModel bean used to convert the documents into
+	 * vectors
+	 */
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 		this(jdbcTemplate, embeddingClient, INVALID_EMBEDDING_DIMENSION, OracleDistanceType.COSINE, false,
 				DEFAULT_INDEX_TYPE, DEFAULT_ACCURACY);
 	}
 
+	/**
+	 * Creates an OracleVectorStore
+	 * @param jdbcTemplate JdbcTemplate bean used to access the underlying database
+	 * @param embeddingClient EmbeddingModel bean used to convert the documents into
+	 * vectors
+	 * @param dimensions FIXME : not used
+	 */
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions) {
 		this(jdbcTemplate, embeddingClient, dimensions, OracleDistanceType.COSINE, false, DEFAULT_INDEX_TYPE,
 				DEFAULT_ACCURACY);
 	}
 
+	/**
+	 * Creates an OracleVectorStore
+	 * @param jdbcTemplate JdbcTemplate bean used to access the underlying database
+	 * @param embeddingClient EmbeddingModel bean used to convert the documents into
+	 * vectors
+	 * @param dimensions FIXME : not used
+	 * @param distanceType Distance function that will be used when searching, and, if an
+	 * index is created, it will use this distance type.
+	 * @param removeExistingVectorStoreTable Indicates whether the existing "vector_store"
+	 * table should be deleted.
+	 * @param indexType The index type, if set to a value different to NONE, an index will
+	 * be created using the distanceType and accuracy provided.
+	 * @param accuracy Percentage value (between 0 and 100) representing the accuracy of
+	 * the index.
+	 */
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions,
 			OracleDistanceType distanceType, boolean removeExistingVectorStoreTable, OracleIndexType indexType,
 			byte accuracy) {
@@ -140,7 +180,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		if (accuracy < 0 || accuracy > 100) {
 			logger.warn("Invalid accuracy value provided, falling back to default value.");
 			this.accuracy = DEFAULT_ACCURACY;
-		} else {
+		}
+		else {
 			this.accuracy = accuracy;
 		}
 	}
@@ -336,25 +377,24 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		try {
 			this.jdbcTemplate.execute(String.format("""
-					        begin
-					            execute immediate 'create table %s (
+					        create table %s (
 					            id varchar2(36),
 					            text clob,
 					            embeddings vector,
 					            metadata json,
-					            primary key (id))';
-					        exception
-					            when others then
-					            if sqlcode != -942 then
-					                raise;
-					            end if;
-					        end;
+					            primary key (id))
 					""", this.VECTOR_TABLE));
 			logger.debug("Create table " + this.VECTOR_TABLE);
 		}
-		catch (Exception e) {
-			logger.error("Error creating table\n" + e.getMessage());
-			throw (e);
+		catch (DataAccessException e) {
+			if ((e.getCause() instanceof SQLSyntaxErrorException)
+					&& (((SQLSyntaxErrorException) e.getCause()).getErrorCode() == 955)) {
+				logger.info("Using existing table " + this.VECTOR_TABLE);
+			}
+			else {
+				logger.error("Error creating table\n" + e.getMessage());
+				throw (e);
+			}
 		}
 
 		if (indexType != OracleIndexType.NONE) {
@@ -365,17 +405,17 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 			};
 			try {
 				String createVectorIndexStatement = String.format("""
-						CREATE VECTOR INDEX %s_%s_idx ON %s ( embeddings ) 
+						CREATE VECTOR INDEX %s_%s_idx ON %s ( embeddings )
 									%s
 									WITH DISTANCE %s
 									WITH TARGET ACCURACY %d
-									""",
-						indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(),VECTOR_TABLE,
-						indexTypeSQL,
-						distanceType,
-						accuracy);
+									""", indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(), VECTOR_TABLE,
+						indexTypeSQL, distanceType, accuracy);
 				this.jdbcTemplate.execute(createVectorIndexStatement);
-			} catch (DataAccessException e) {
+				logger.debug(String.format("Create index  %s_%s_idx ", indexType.toString().toLowerCase(),
+						VECTOR_TABLE.toLowerCase()));
+			}
+			catch (DataAccessException e) {
 				logger.error("Error creating index\n" + e.getMessage());
 				throw (e);
 			}

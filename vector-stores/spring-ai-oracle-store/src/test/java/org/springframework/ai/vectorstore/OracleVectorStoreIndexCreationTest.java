@@ -23,34 +23,33 @@ import java.util.List;
 
 public class OracleVectorStoreIndexCreationTest {
 
-  @ParameterizedTest
-  @CsvSource({"COSINE,HNSW,70", "DOT,HNSW,70", "EUCLIDEAN,HNSW,70",
-      "COSINE,IVF,70", "DOT,IVF,70", "EUCLIDEAN,IVF,70",
-      "COSINE,HNSW,110", "DOT,HNSW,110", "EUCLIDEAN,HNSW,110",
-      "COSINE,IVF,-1", "DOT,IVF,-1", "EUCLIDEAN,IVF,-1"})
-  public void testDotConfig(String sDistanceType, String sIndexType, byte accuracy) throws Exception {
-    JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
-    EmbeddingModel embeddingModel = Mockito.mock(EmbeddingModel.class);
+	@ParameterizedTest
+	@CsvSource({ "COSINE,HNSW,70", "DOT,HNSW,70", "EUCLIDEAN,HNSW,70", "COSINE,IVF,70", "DOT,IVF,70",
+			"EUCLIDEAN,IVF,70", "COSINE,HNSW,110", "DOT,HNSW,110", "EUCLIDEAN,HNSW,110", "COSINE,IVF,-1", "DOT,IVF,-1",
+			"EUCLIDEAN,IVF,-1" })
+	public void testDotConfig(String sDistanceType, String sIndexType, byte accuracy) throws Exception {
+		JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+		EmbeddingModel embeddingModel = Mockito.mock(EmbeddingModel.class);
 
-    OracleVectorStore.OracleDistanceType distanceType = OracleVectorStore.OracleDistanceType.valueOf(sDistanceType);
-    OracleVectorStore.OracleIndexType indexType = OracleVectorStore.OracleIndexType.valueOf(sIndexType);
-    String indexTypeSQL = switch (indexType) {
-      case HNSW -> "ORGANIZATION INMEMORY NEIGHBOR GRAPH";
-      case IVF -> "ORGANIZATION NEIGHBOR PARTITIONS";
-      default -> "";
-    };
+		OracleVectorStore.OracleDistanceType distanceType = OracleVectorStore.OracleDistanceType.valueOf(sDistanceType);
+		OracleVectorStore.OracleIndexType indexType = OracleVectorStore.OracleIndexType.valueOf(sIndexType);
+		String indexTypeSQL = switch (indexType) {
+			case HNSW -> "ORGANIZATION INMEMORY NEIGHBOR GRAPH";
+			case IVF -> "ORGANIZATION NEIGHBOR PARTITIONS";
+			default -> "";
+		};
 
-    OracleVectorStore vectorStore = new OracleVectorStore(jdbcTemplate, embeddingModel,
-        OracleVectorStore.INVALID_EMBEDDING_DIMENSION, distanceType,
-        false, indexType, accuracy);
-    vectorStore.afterPropertiesSet();
-    Mockito.verify(jdbcTemplate).execute(Mockito.contains(indexTypeSQL));
-    Mockito.verify(jdbcTemplate).execute(Mockito.contains(distanceType.toString()));
-    if (accuracy < 0 || accuracy > 100) {
-      Mockito.verify(jdbcTemplate).execute(Mockito.contains(String.valueOf(OracleVectorStore.DEFAULT_ACCURACY)));
-    } else {
-      Mockito.verify(jdbcTemplate).execute(Mockito.contains(String.valueOf(accuracy)));
-    }
-  }
+		OracleVectorStore vectorStore = new OracleVectorStore(jdbcTemplate, embeddingModel,
+				OracleVectorStore.INVALID_EMBEDDING_DIMENSION, distanceType, false, indexType, accuracy);
+		vectorStore.afterPropertiesSet();
+		Mockito.verify(jdbcTemplate).execute(Mockito.contains(indexTypeSQL));
+		Mockito.verify(jdbcTemplate).execute(Mockito.contains(distanceType.toString()));
+		if (accuracy < 0 || accuracy > 100) {
+			Mockito.verify(jdbcTemplate).execute(Mockito.contains(String.valueOf(OracleVectorStore.DEFAULT_ACCURACY)));
+		}
+		else {
+			Mockito.verify(jdbcTemplate).execute(Mockito.contains(String.valueOf(accuracy)));
+		}
+	}
 
 }
