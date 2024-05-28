@@ -16,8 +16,68 @@
 package org.springframework.ai.oci;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.ai.embedding.EmbeddingOptions;
 
+/**
+ * The configuration information for OCI embedding requests
+ *
+ * @author Anders Swanson
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class OCIEmbeddingOptions implements EmbeddingOptions {
+
+    private @JsonProperty("model") String model;
+    private @JsonProperty("compartment") String compartment;
+    private @JsonProperty("servingMode") String servingMode;
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private final OCIEmbeddingOptions options = new OCIEmbeddingOptions();
+        public Builder withModel(String model) {
+            this.options.setModel(model);
+            return this;
+        }
+
+        public Builder withCompartment(String compartment) {
+            this.options.setCompartment(compartment);
+            return this;
+        }
+
+        public Builder withServingMode(String servingMode) {
+            this.options.setServingMode(servingMode);
+            return this;
+        }
+
+        public OCIEmbeddingOptions build() {
+            return this.options;
+        }
+    }
+
+    public String getModel() {
+        return this.model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public String getCompartment() {
+        return compartment;
+    }
+
+    public void setCompartment(String compartment) {
+        this.compartment = compartment;
+    }
+
+    public String getServingMode() {
+        return servingMode;
+    }
+
+    public void setServingMode(String servingMode) {
+        this.servingMode = servingMode;
+    }
 }

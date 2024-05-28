@@ -30,10 +30,22 @@
         </dependency>
 
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-retry</artifactId>
-            <version>${project.parent.version}</version>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-generativeaiinference</artifactId>
+            <version>${oci-sdk-version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-identity</artifactId>
+            <version>${oci-sdk-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.oci.sdk</groupId>
+            <artifactId>oci-java-sdk-addons-oke-workload-identity</artifactId>
+            <version>${oci-sdk-version}</version>
+        </dependency>
+
 
         <!-- NOTE: Required only by the @ConstructorBinding. -->
         <dependency>
@@ -72,14 +84,6 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-test</artifactId>
             <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-xml</artifactId>
-            <!-- <version>2.16.1</version> -->
-            <version>2.11.1</version>
             <scope>test</scope>
         </dependency>
 
