@@ -27,57 +27,63 @@ import org.springframework.ai.embedding.EmbeddingOptions;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class OCIEmbeddingOptions implements EmbeddingOptions {
 
-    private @JsonProperty("model") String model;
-    private @JsonProperty("compartment") String compartment;
-    private @JsonProperty("servingMode") String servingMode;
+	private @JsonProperty("model") String model;
 
-    public static Builder builder() {
-        return new Builder();
-    }
+	private @JsonProperty("compartment") String compartment;
 
-    public static class Builder {
-        private final OCIEmbeddingOptions options = new OCIEmbeddingOptions();
-        public Builder withModel(String model) {
-            this.options.setModel(model);
-            return this;
-        }
+	private @JsonProperty("servingMode") String servingMode;
 
-        public Builder withCompartment(String compartment) {
-            this.options.setCompartment(compartment);
-            return this;
-        }
+	public static Builder builder() {
+		return new Builder();
+	}
 
-        public Builder withServingMode(String servingMode) {
-            this.options.setServingMode(servingMode);
-            return this;
-        }
+	public static class Builder {
 
-        public OCIEmbeddingOptions build() {
-            return this.options;
-        }
-    }
+		private final OCIEmbeddingOptions options = new OCIEmbeddingOptions();
 
-    public String getModel() {
-        return this.model;
-    }
+		public Builder withModel(String model) {
+			this.options.setModel(model);
+			return this;
+		}
 
-    public void setModel(String model) {
-        this.model = model;
-    }
+		public Builder withCompartment(String compartment) {
+			this.options.setCompartment(compartment);
+			return this;
+		}
 
-    public String getCompartment() {
-        return compartment;
-    }
+		public Builder withServingMode(String servingMode) {
+			this.options.setServingMode(servingMode);
+			return this;
+		}
 
-    public void setCompartment(String compartment) {
-        this.compartment = compartment;
-    }
+		public OCIEmbeddingOptions build() {
+			return this.options;
+		}
 
-    public String getServingMode() {
-        return servingMode;
-    }
+	}
 
-    public void setServingMode(String servingMode) {
-        this.servingMode = servingMode;
-    }
+	public String getModel() {
+		return this.model;
+	}
+
+	public void setModel(String model) {
+		this.model = model;
+	}
+
+	public String getCompartment() {
+		return compartment;
+	}
+
+	public void setCompartment(String compartment) {
+		this.compartment = compartment;
+	}
+
+	public String getServingMode() {
+		return servingMode;
+	}
+
+	public void setServingMode(String servingMode) {
+		this.servingMode = servingMode;
+	}
+
 }

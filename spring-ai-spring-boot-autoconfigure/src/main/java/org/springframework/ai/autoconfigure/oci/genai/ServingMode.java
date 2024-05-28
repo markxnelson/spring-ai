@@ -16,15 +16,17 @@
 package org.springframework.ai.autoconfigure.oci.genai;
 
 public enum ServingMode {
-    ON_DEMAND("on-demand"),
-    DEDICATED("dedicated");
 
-    private final String mode;
-    ServingMode(String mode) {
-        this.mode = mode;
-    }
+	ON_DEMAND("on-demand"), DEDICATED("dedicated");
 
-    public String getMode() {
-        return mode;
-    }
+	private final String mode;
+
+	ServingMode(String mode) {
+		this.mode = mode;
+	}
+
+	public String getMode() {
+		return mode;
+	}
+
 }

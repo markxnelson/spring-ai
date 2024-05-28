@@ -15,56 +15,60 @@
  */
 package org.springframework.ai.autoconfigure.oci.genai;
 
-import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.oci.OCIEmbeddingOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(OCIEmbeddingModelProperties.CONFIG_PREFIX)
 public class OCIEmbeddingModelProperties {
-    public static final String CONFIG_PREFIX = "spring.ai.oci.genai.embedding";
 
-    private ServingMode servingMode;
-    private String compartment;
-    private String model;
-    private boolean enabled;
+	public static final String CONFIG_PREFIX = "spring.ai.oci.genai.embedding";
 
-    public OCIEmbeddingOptions getEmbeddingOptions() {
-        return OCIEmbeddingOptions.builder()
-                .withCompartment(compartment)
-                .withModel(model)
-                .withServingMode(servingMode.getMode())
-                .build();
-    }
+	private ServingMode servingMode;
 
-    public ServingMode getServingMode() {
-        return servingMode;
-    }
+	private String compartment;
 
-    public void setServingMode(ServingMode servingMode) {
-        this.servingMode = servingMode;
-    }
+	private String model;
 
-    public String getCompartment() {
-        return compartment;
-    }
+	private boolean enabled;
 
-    public void setCompartment(String compartment) {
-        this.compartment = compartment;
-    }
+	public OCIEmbeddingOptions getEmbeddingOptions() {
+		return OCIEmbeddingOptions.builder()
+			.withCompartment(compartment)
+			.withModel(model)
+			.withServingMode(servingMode.getMode())
+			.build();
+	}
 
-    public String getModel() {
-        return model;
-    }
+	public ServingMode getServingMode() {
+		return servingMode;
+	}
 
-    public void setModel(String model) {
-        this.model = model;
-    }
+	public void setServingMode(ServingMode servingMode) {
+		this.servingMode = servingMode;
+	}
 
-    public boolean isEnabled() {
-        return enabled;
-    }
+	public String getCompartment() {
+		return compartment;
+	}
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
+	public void setCompartment(String compartment) {
+		this.compartment = compartment;
+	}
+
+	public String getModel() {
+		return model;
+	}
+
+	public void setModel(String model) {
+		this.model = model;
+	}
+
+	public boolean isEnabled() {
+		return enabled;
+	}
+
+	public void setEnabled(boolean enabled) {
+		this.enabled = enabled;
+	}
+
 }

@@ -27,7 +27,6 @@ import com.oracle.bmc.auth.SimplePrivateKeySupplier;
 import com.oracle.bmc.auth.okeworkloadidentity.OkeWorkloadIdentityAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.oracle.bmc.retrier.RetryConfiguration;
-import org.springframework.ai.autoconfigure.azure.openai.AzureOpenAiChatProperties;
 import org.springframework.ai.oci.OCIEmbeddingModel;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -38,48 +37,51 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.util.StringUtils;
 
 @AutoConfiguration
-@ConditionalOnClass({GenerativeAiInferenceClient.class, OCIEmbeddingModel.class})
-@EnableConfigurationProperties({OCIConnectionProperties.class, OCIEmbeddingModelProperties.class})
+@ConditionalOnClass({ GenerativeAiInferenceClient.class, OCIEmbeddingModel.class })
+@EnableConfigurationProperties({ OCIConnectionProperties.class, OCIEmbeddingModelProperties.class })
 public class OCIGenAiAutoConfiguration {
-    @ConditionalOnMissingBean
-    @Bean
-    public GenerativeAiInferenceClient generativeAiInferenceClient(OCIConnectionProperties properties) throws IOException {
-        ClientConfiguration clientConfiguration = ClientConfiguration.builder()
-                .retryConfiguration(RetryConfiguration.SDK_DEFAULT_RETRY_CONFIGURATION)
-                .build();
-        GenerativeAiInferenceClient.Builder builder = GenerativeAiInferenceClient.builder()
-                .region(Region.valueOf(properties.getRegion()))
-                .configuration(clientConfiguration);
-        if (StringUtils.hasText(properties.getEndpoint())) {
-            builder.endpoint(properties.getEndpoint());
-        }
-        return builder.build(authenticationProvider(properties));
-    }
 
-    @Bean
-    @ConditionalOnProperty(prefix = OCIEmbeddingModelProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true",
-            matchIfMissing = true)
-    public OCIEmbeddingModel ociEmbeddingModel(GenerativeAiInferenceClient generativeAiClient, OCIEmbeddingModelProperties properties) throws IOException {
-        return new OCIEmbeddingModel(generativeAiClient, properties.getEmbeddingOptions());
-    }
+	@ConditionalOnMissingBean
+	@Bean
+	public GenerativeAiInferenceClient generativeAiInferenceClient(OCIConnectionProperties properties)
+			throws IOException {
+		ClientConfiguration clientConfiguration = ClientConfiguration.builder()
+			.retryConfiguration(RetryConfiguration.SDK_DEFAULT_RETRY_CONFIGURATION)
+			.build();
+		GenerativeAiInferenceClient.Builder builder = GenerativeAiInferenceClient.builder()
+			.configuration(clientConfiguration);
+		if (StringUtils.hasText(properties.getRegion())) {
+			builder.region(Region.valueOf(properties.getRegion()));
+		}
+		if (StringUtils.hasText(properties.getEndpoint())) {
+			builder.endpoint(properties.getEndpoint());
+		}
+		return builder.build(authenticationProvider(properties));
+	}
 
-    private static BasicAuthenticationDetailsProvider authenticationProvider(OCIConnectionProperties properties) throws IOException {
-        return switch (properties.getAuthenticationType()) {
-            case FILE ->
-                    new ConfigFileAuthenticationDetailsProvider(properties.getFile(), properties.getProfile());
-            case INSTANCE_PRINCIPAL ->
-                    InstancePrincipalsAuthenticationDetailsProvider.builder().build();
-            case WORKLOAD_IDENTITY ->
-                    OkeWorkloadIdentityAuthenticationDetailsProvider.builder().build();
-            case SIMPLE ->
-                    SimpleAuthenticationDetailsProvider.builder()
-                            .userId(properties.getUserId())
-                            .tenantId(properties.getTenantId())
-                            .fingerprint(properties.getFingerprint())
-                            .privateKeySupplier(new SimplePrivateKeySupplier(properties.getPrivateKey()))
-                            .passPhrase(properties.getPassPhrase())
-                            .region(Region.valueOf(properties.getRegion()))
-                            .build();
-        };
-    }
+	@Bean
+	@ConditionalOnProperty(prefix = OCIEmbeddingModelProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true",
+			matchIfMissing = true)
+	public OCIEmbeddingModel ociEmbeddingModel(GenerativeAiInferenceClient generativeAiClient,
+			OCIEmbeddingModelProperties properties) throws IOException {
+		return new OCIEmbeddingModel(generativeAiClient, properties.getEmbeddingOptions());
+	}
+
+	private static BasicAuthenticationDetailsProvider authenticationProvider(OCIConnectionProperties properties)
+			throws IOException {
+		return switch (properties.getAuthenticationType()) {
+			case FILE -> new ConfigFileAuthenticationDetailsProvider(properties.getFile(), properties.getProfile());
+			case INSTANCE_PRINCIPAL -> InstancePrincipalsAuthenticationDetailsProvider.builder().build();
+			case WORKLOAD_IDENTITY -> OkeWorkloadIdentityAuthenticationDetailsProvider.builder().build();
+			case SIMPLE -> SimpleAuthenticationDetailsProvider.builder()
+				.userId(properties.getUserId())
+				.tenantId(properties.getTenantId())
+				.fingerprint(properties.getFingerprint())
+				.privateKeySupplier(new SimplePrivateKeySupplier(properties.getPrivateKey()))
+				.passPhrase(properties.getPassPhrase())
+				.region(Region.valueOf(properties.getRegion()))
+				.build();
+		};
+	}
+
 }

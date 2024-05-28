@@ -15,121 +15,131 @@
  */
 package org.springframework.ai.autoconfigure.oci.genai;
 
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(OCIConnectionProperties.CONFIG_PREFIX)
 public class OCIConnectionProperties {
-    private static final String DEFAULT_PROFILE = "DEFAULT";
-    public static final String CONFIG_PREFIX = "spring.ai.oci.genai";
 
-    public enum AuthenticationType {
-        FILE("file"),
-        INSTANCE_PRINCIPAL("instance-principal"),
-        WORKLOAD_IDENTITY("workload-identity"),
-        SIMPLE("simple");
+	private static final String DEFAULT_PROFILE = "DEFAULT";
 
-        private final String authType;
+	public static final String CONFIG_PREFIX = "spring.ai.oci.genai";
 
-        AuthenticationType(String authType) {
-            this.authType = authType;
-        }
+	public enum AuthenticationType {
 
-        public String getAuthType() {
-            return this.authType;
-        }
-    }
+		FILE("file"), INSTANCE_PRINCIPAL("instance-principal"), WORKLOAD_IDENTITY("workload-identity"),
+		SIMPLE("simple");
 
-    private AuthenticationType authenticationType;
-    private String profile;
-    private String file;
-    private String tenantId;
-    private String userId;
-    private String fingerprint;
-    private String privateKey;
-    private String passPhrase;
-    private String region;
-    private String endpoint;
+		private final String authType;
 
-    public String getRegion() {
-        return region;
-    }
+		AuthenticationType(String authType) {
+			this.authType = authType;
+		}
 
-    public void setRegion(String region) {
-        this.region = region;
-    }
+		public String getAuthType() {
+			return this.authType;
+		}
 
-    public String getPassPhrase() {
-        return passPhrase;
-    }
+	}
 
-    public void setPassPhrase(String passPhrase) {
-        this.passPhrase = passPhrase;
-    }
+	private AuthenticationType authenticationType;
 
-    public String getPrivateKey() {
-        return privateKey;
-    }
+	private String profile;
 
-    public void setPrivateKey(String privateKey) {
-        this.privateKey = privateKey;
-    }
+	private String file;
 
-    public String getFingerprint() {
-        return fingerprint;
-    }
+	private String tenantId;
 
-    public void setFingerprint(String fingerprint) {
-        this.fingerprint = fingerprint;
-    }
+	private String userId;
 
-    public String getUserId() {
-        return userId;
-    }
+	private String fingerprint;
 
-    public void setUserId(String userId) {
-        this.userId = userId;
-    }
+	private String privateKey;
 
-    public String getTenantId() {
-        return tenantId;
-    }
+	private String passPhrase;
 
-    public void setTenantId(String tenantId) {
-        this.tenantId = tenantId;
-    }
+	private String region;
 
-    public String getFile() {
-        return file;
-    }
+	private String endpoint;
 
-    public void setFile(String file) {
-        this.file = file;
-    }
+	public String getRegion() {
+		return region;
+	}
 
-    public String getProfile() {
-        return StringUtils.hasText(profile) ? profile : DEFAULT_PROFILE;
-    }
+	public void setRegion(String region) {
+		this.region = region;
+	}
 
-    public void setProfile(String profile) {
-        this.profile = profile;
-    }
+	public String getPassPhrase() {
+		return passPhrase;
+	}
 
-    public AuthenticationType getAuthenticationType() {
-        return authenticationType;
-    }
+	public void setPassPhrase(String passPhrase) {
+		this.passPhrase = passPhrase;
+	}
 
-    public void setAuthenticationType(AuthenticationType authenticationType) {
-        this.authenticationType = authenticationType;
-    }
+	public String getPrivateKey() {
+		return privateKey;
+	}
 
-    public String getEndpoint() {
-        return endpoint;
-    }
+	public void setPrivateKey(String privateKey) {
+		this.privateKey = privateKey;
+	}
 
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
+	public String getFingerprint() {
+		return fingerprint;
+	}
+
+	public void setFingerprint(String fingerprint) {
+		this.fingerprint = fingerprint;
+	}
+
+	public String getUserId() {
+		return userId;
+	}
+
+	public void setUserId(String userId) {
+		this.userId = userId;
+	}
+
+	public String getTenantId() {
+		return tenantId;
+	}
+
+	public void setTenantId(String tenantId) {
+		this.tenantId = tenantId;
+	}
+
+	public String getFile() {
+		return file;
+	}
+
+	public void setFile(String file) {
+		this.file = file;
+	}
+
+	public String getProfile() {
+		return StringUtils.hasText(profile) ? profile : DEFAULT_PROFILE;
+	}
+
+	public void setProfile(String profile) {
+		this.profile = profile;
+	}
+
+	public AuthenticationType getAuthenticationType() {
+		return authenticationType;
+	}
+
+	public void setAuthenticationType(AuthenticationType authenticationType) {
+		this.authenticationType = authenticationType;
+	}
+
+	public String getEndpoint() {
+		return endpoint;
+	}
+
+	public void setEndpoint(String endpoint) {
+		this.endpoint = endpoint;
+	}
 
 }
