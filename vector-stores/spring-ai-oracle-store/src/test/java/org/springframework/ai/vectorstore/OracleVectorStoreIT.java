@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -33,6 +34,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.oci.OCIEmbeddingModel;
+import org.springframework.ai.oci.OCIEmbeddingOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser.FilterExpressionParseException;
@@ -53,6 +56,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.oracle.OracleContainer;
 
+import com.oracle.bmc.Region;
+import com.oracle.bmc.auth.ConfigFileAuthenticationDetailsProvider;
+import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.zaxxer.hikari.HikariDataSource;
 import org.testcontainers.utility.MountableFile;
 
@@ -62,7 +68,7 @@ import org.testcontainers.utility.MountableFile;
  * @author Fernanda Meheust
  */
 @Testcontainers
-@EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "OCI_COMPARTMENT_ID", matches = ".+")
 public class OracleVectorStoreIT {
 
 	private static final String TABLE_NAME = "vector_store";
@@ -367,7 +373,27 @@ public class OracleVectorStoreIT {
 
 		@Bean
 		public EmbeddingModel embeddingClient() {
-			return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
+			// return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
+			String CONFIG_FILE = Paths.get(System.getProperty("user.home"), ".oci", "config").toString();
+			String PROFILE = "DEFAULT";
+			Region REGION = Region.valueOf("us-chicago-1");
+			String EMBEDDING_MODEL = "cohere.embed-english-light-v2.0";
+			String COMPARTMENT_ID = System.getenv("OCI_COMPARTMENT_ID");
+
+			try {
+				ConfigFileAuthenticationDetailsProvider authProvider = new ConfigFileAuthenticationDetailsProvider(CONFIG_FILE, PROFILE);
+				GenerativeAiInferenceClient client = GenerativeAiInferenceClient.builder()
+					.region(REGION)
+					.build(authProvider);
+				OCIEmbeddingOptions options = OCIEmbeddingOptions.builder()
+					.withModel(EMBEDDING_MODEL)
+					.withCompartment(COMPARTMENT_ID)
+					.withServingMode("on-demand")
+					.build();
+				return new OCIEmbeddingModel(client, options);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
 		}
 
 	}
