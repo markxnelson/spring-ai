@@ -54,6 +54,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.oracle.OracleContainer;
 
 import com.zaxxer.hikari.HikariDataSource;
+import org.testcontainers.utility.MountableFile;
 
 /**
  * @author Corrado De Bari
@@ -63,6 +64,8 @@ import com.zaxxer.hikari.HikariDataSource;
 @Testcontainers
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 public class OracleVectorStoreIT {
+
+	private static final String TABLE_NAME = "vector_store";
 
 	@Container
 	static OracleContainer oracleContainer = new OracleContainer("gvenzl/oracle-free:23.4-slim-faststart")
@@ -88,7 +91,7 @@ public class OracleVectorStoreIT {
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withUserConfiguration(TestApplication.class)
 		.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=COSINE",
-
+				"test.spring.ai.vectorstore.oracle.removeExistingVectorStoreTable=false",
 				// JdbcTemplate configuration
 				String.format("app.datasource.url=%s", oracleContainer.getJdbcUrl()),
 				"app.datasource.username=testuser", "app.datasource.password=testpwd",
@@ -96,7 +99,7 @@ public class OracleVectorStoreIT {
 
 	private static void dropTable(ApplicationContext context) {
 		JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
-		jdbcTemplate.execute("drop table vector_store");
+		jdbcTemplate.execute("drop table " + TABLE_NAME);
 	}
 
 	@ParameterizedTest(name = "{0} : {displayName} ")
@@ -301,6 +304,33 @@ public class OracleVectorStoreIT {
 		return true;
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = { "NONE", /* "HNSW", */ "IVF" })
+	public void createIndex(String indexType) {
+		System.out.println(oracleContainer.getJdbcUrl());
+		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.indexType=" + indexType).run(context -> {
+			JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
+
+			VectorStore vectorStore = context.getBean(VectorStore.class);
+			vectorStore.add(documents);
+
+			// check that the table exists
+			String tableCount = String.format("SELECT count(*) FROM USER_TABLES WHERE TABLE_NAME= '%s'",
+					TABLE_NAME.toUpperCase());
+			Assert.assertEquals("Table not found", 1L,
+					jdbcTemplate.queryForObject(tableCount, Integer.class).longValue());
+
+			// check that index was created
+			long expectedCount = indexType.equals("NONE") ? 0L : 1L;
+			String indexCount = "SELECT count(*) FROM SYS.ALL_INDEXES where INDEX_NAME = "
+					+ String.format("'%s_%s_idx'", indexType, TABLE_NAME).toUpperCase();
+			Assert.assertEquals("Index not found", expectedCount,
+					jdbcTemplate.queryForObject(indexCount, Integer.class).longValue());
+
+			dropTable(context);
+		});
+	}
+
 	@SpringBootConfiguration
 	@EnableAutoConfiguration(exclude = { DataSourceAutoConfiguration.class })
 	public static class TestApplication {
@@ -308,11 +338,14 @@ public class OracleVectorStoreIT {
 		@Value("${test.spring.ai.vectorstore.oracle.distanceType}")
 		OracleVectorStore.OracleDistanceType distanceType;
 
+		@Value("${test.spring.ai.vectorstore.oracle.indexType:NONE}")
+		OracleVectorStore.OracleIndexType indexType;
+
 		@Bean
 		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 			return new OracleVectorStore(jdbcTemplate, embeddingClient,
-					OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE, distanceType, true,
-					OracleVectorStore.DEFAULT_INDEX_TYPE, OracleVectorStore.DEFAULT_ACCURACY);
+					OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE, distanceType, true, indexType,
+					OracleVectorStore.DEFAULT_ACCURACY);
 		}
 
 		@Bean
