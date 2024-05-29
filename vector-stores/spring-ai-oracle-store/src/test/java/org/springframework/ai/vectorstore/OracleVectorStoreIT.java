@@ -36,8 +36,6 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.oci.OCIEmbeddingModel;
 import org.springframework.ai.oci.OCIEmbeddingOptions;
-import org.springframework.ai.openai.OpenAiEmbeddingModel;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser.FilterExpressionParseException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringBootConfiguration;
@@ -63,6 +61,18 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.testcontainers.utility.MountableFile;
 
 /**
+ * Tests for the Oracle Vector Store.
+ * 
+ * Please note: These tests use the OCI Generative AI Service to perform embeddings.  At the time of this
+ * initial checkin, only Cohere models are available for embedding in this service.  Cohere models are all
+ * normalized and therefore cosine is the only distance function that makes sense.  Note that euclidean
+ * distance would be equivalent to cosine for normalized vectors but is more computationally expensive.
+ * 
+ * The tests below are parameterized with the distance function, however only COSINE is tested.
+ * The parameterization has been left in place in anticipation of adding tests with different model in 
+ * the future, or tests for images rather than text where we would expect to use different distance
+ * functions.
+ * 
  * @author Corrado De Bari
  * @author Mark Nelson
  * @author Fernanda Meheust
@@ -72,6 +82,7 @@ import org.testcontainers.utility.MountableFile;
 public class OracleVectorStoreIT {
 
 	private static final String TABLE_NAME = "vector_store";
+	private static final int COHERE_ENG_LIGHT_v2_EMBEDDING_DIMENSION_SIZE = 1024;
 
 	@Container
 	static OracleContainer oracleContainer = new OracleContainer("gvenzl/oracle-free:23.4-slim-faststart")
@@ -109,7 +120,7 @@ public class OracleVectorStoreIT {
 	}
 
 	@ParameterizedTest(name = "{0} : {displayName} ")
-	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN" })
+	@ValueSource(strings = { "COSINE" })
 	public void addAndSearch(String distanceType) {
 		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
 			.run(context -> {
@@ -138,7 +149,7 @@ public class OracleVectorStoreIT {
 	}
 
 	@ParameterizedTest(name = "{0} : {displayName} ")
-	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN" })
+	@ValueSource(strings = { "COSINE" })
 	public void searchWithFilters(String distanceType) {
 
 		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
@@ -212,7 +223,7 @@ public class OracleVectorStoreIT {
 	}
 
 	@ParameterizedTest(name = "{0} : {displayName} ")
-	@ValueSource(strings = { "COSINE", "DOT", "EUCLIDEAN" })
+	@ValueSource(strings = { "COSINE" })
 	public void documentUpdate(String distanceType) {
 
 		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
@@ -253,7 +264,7 @@ public class OracleVectorStoreIT {
 
 	// DOT excluded for now - its gives an out of range threshold - need to debug that
 	@ParameterizedTest(name = "{0} : {displayName} ")
-	@ValueSource(strings = { "COSINE", "EUCLIDEAN" })
+	@ValueSource(strings = { "COSINE" })
 	public void searchWithThreshold(String distanceType) {
 
 		contextRunner.withPropertyValues("test.spring.ai.vectorstore.oracle.distanceType=" + distanceType)
@@ -350,7 +361,7 @@ public class OracleVectorStoreIT {
 		@Bean
 		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
 			return new OracleVectorStore(jdbcTemplate, embeddingClient,
-					OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE, distanceType, true, indexType,
+					COHERE_ENG_LIGHT_v2_EMBEDDING_DIMENSION_SIZE, distanceType, true, indexType,
 					OracleVectorStore.DEFAULT_ACCURACY);
 		}
 
