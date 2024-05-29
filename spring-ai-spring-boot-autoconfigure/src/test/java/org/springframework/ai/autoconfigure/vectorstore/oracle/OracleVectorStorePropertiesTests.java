@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Christian Tzolov
+ * @author Fernanda Meheust
  */
 public class OracleVectorStorePropertiesTests {
 

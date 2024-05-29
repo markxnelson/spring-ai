@@ -15,15 +15,16 @@
  */
 package org.springframework.ai.autoconfigure.vectorstore.oracle;
 
-import org.junit.jupiter.api.Test;
+import java.util.List;
+
+import javax.sql.DataSource;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.transformers.TransformersEmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -32,15 +33,10 @@ import org.springframework.boot.test.context.runner.ContextConsumer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.List;
-
-import javax.sql.DataSource;
 
 /**
  * @author Fernanda Meheust

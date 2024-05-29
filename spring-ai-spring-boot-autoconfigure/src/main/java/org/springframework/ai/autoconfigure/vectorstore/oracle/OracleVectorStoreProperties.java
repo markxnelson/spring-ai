@@ -20,6 +20,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.vectorstore.OracleVectorStore;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * @author Fernanda Meheust
+ */
 @ConfigurationProperties(OracleVectorStoreProperties.CONFIG_PREFIX)
 public class OracleVectorStoreProperties {
 

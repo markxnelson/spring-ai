@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * @author Christian Tzolov
+ * @author Mark Nelson
  */
 @ExtendWith(MockitoExtension.class)
 public class OracleVectorEmbeddingDimensionsTests {

@@ -15,7 +15,7 @@
  */
 package org.springframework.ai.vectorstore;
 
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -56,11 +56,10 @@ import org.testcontainers.oracle.OracleContainer;
 import com.zaxxer.hikari.HikariDataSource;
 import org.testcontainers.utility.MountableFile;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * @author Corrado De Bari
  * @author Mark Nelson
+ * @author Fernanda Meheust
  */
 @Testcontainers
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
