@@ -71,7 +71,7 @@ public class OracleVectorEmbeddingDimensionsTests {
 
 		var dim = new OracleVectorStore(jdbcTemplate, embeddingModel).embeddingDimensions();
 
-		assertThat(dim).isEqualTo(OracleVectorStore.OPENAI_EMBEDDING_DIMENSION_SIZE);
+		assertThat(dim).isEqualTo(OracleVectorStore.COHERE_EMBEDDING_DIMENSION_SIZE);
 		verify(embeddingModel, only()).dimensions();
 	}
 

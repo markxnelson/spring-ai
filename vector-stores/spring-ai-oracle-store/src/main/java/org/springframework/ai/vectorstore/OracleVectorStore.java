@@ -17,7 +17,6 @@ package org.springframework.ai.vectorstore;
 
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLSyntaxErrorException;
 import java.util.ArrayList;
@@ -36,8 +35,6 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementSetter;
-import org.springframework.jdbc.core.RowMapper;
 import org.springframework.util.StringUtils;
 
 //Oracle DB
@@ -59,29 +56,29 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	public static final OracleIndexType DEFAULT_INDEX_TYPE = OracleIndexType.NONE;
 
-	public static final int OPENAI_EMBEDDING_DIMENSION_SIZE = 1536;
+	public static final int COHERE_EMBEDDING_DIMENSION_SIZE = 1024;
 
 	public static final int INVALID_EMBEDDING_DIMENSION = -1;
 
-	public String VECTOR_TABLE = "vector_store";
+	private final String VECTOR_TABLE = "vector_store";
 
 	public final FilterExpressionConverter filterExpressionConverter = new OracleFilterExpressionConverter();
 
 	public int BATCH_SIZE = 100;
 
-	private JdbcTemplate jdbcTemplate;
+	private final JdbcTemplate jdbcTemplate;
 
 	EmbeddingModel embeddingModel;
 
-	private int dimensions;
+	private final int dimensions;
 
-	private OracleDistanceType distanceType;
+	private final OracleDistanceType distanceType;
 
-	private boolean removeExistingVectorStoreTable;
+	private final boolean removeExistingVectorStoreTable;
 
-	private OracleIndexType indexType;
+	private final OracleIndexType indexType;
 
-	private byte accuracy;
+	private final byte accuracy;
 
 	public enum OracleIndexType {
 
@@ -146,7 +143,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	 * @param jdbcTemplate JdbcTemplate bean used to access the underlying database
 	 * @param embeddingClient EmbeddingModel bean used to convert the documents into
 	 * vectors
-	 * @param dimensions FIXME : not used
+	 * @param dimensions Size of embedding vectors
 	 */
 	public OracleVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient, int dimensions) {
 		this(jdbcTemplate, embeddingClient, dimensions, OracleDistanceType.COSINE, false, DEFAULT_INDEX_TYPE,
@@ -158,7 +155,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	 * @param jdbcTemplate JdbcTemplate bean used to access the underlying database
 	 * @param embeddingClient EmbeddingModel bean used to convert the documents into
 	 * vectors
-	 * @param dimensions FIXME : not used
+	 * @param dimensions Size of embedding vectors
 	 * @param distanceType Distance function that will be used when searching, and, if an
 	 * index is created, it will use this distance type.
 	 * @param removeExistingVectorStoreTable Indicates whether the existing "vector_store"
@@ -241,7 +238,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	public Optional<Boolean> delete(List<String> idList) {
 
 		String sql = "delete from " + this.VECTOR_TABLE + " where id = ?";
-		int count[][] = jdbcTemplate.batchUpdate(sql, idList, BATCH_SIZE, (ps, argument) -> {
+		int[][] count = jdbcTemplate.batchUpdate(sql, idList, BATCH_SIZE, (ps, argument) -> {
 			ps.setString(1, argument);
 		});
 
@@ -256,13 +253,13 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 		List<VectorData> nearest = new ArrayList<>();
 
-		logger.debug("Requested query " + request.getQuery());
+		logger.debug("Requested query {}", request.getQuery());
 
 		List<Double> queryEmbeddings = embeddingModel.embed(request.getQuery());
-		logger.debug("Embeddings size: " + queryEmbeddings.size());
+		logger.debug("Embeddings size: {}", queryEmbeddings.size());
 
-		logger.debug("Distance metrics: " + this.distanceType);
-		logger.debug("Distance metrics function: " + this.distanceType.name());
+		logger.debug("Distance metrics: {}", this.distanceType);
+		logger.debug("Distance metrics function: {}", this.distanceType.name());
 
 		int topK = request.getTopK();
 
@@ -278,7 +275,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		double distance = 1 - request.getSimilarityThreshold();
 
 		try {
-			nearest = similaritySearchByMetrics(VECTOR_TABLE, queryEmbeddings, distance, topK, this.distanceType.name(),
+			nearest = similaritySearchByMetrics(queryEmbeddings, distance, topK, this.distanceType.name(),
 					jsonPathFilter);
 		}
 		catch (Exception e) {
@@ -304,8 +301,8 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 
 	}
 
-	List<VectorData> similaritySearchByMetrics(String vectortab, List<Double> vector, double distance, int topK,
-			String distance_metrics_func, String jsonPathFilter) throws SQLException {
+	List<VectorData> similaritySearchByMetrics(List<Double> vector, double distance, int topK,
+			String distance_metrics_func, String jsonPathFilter) {
 		List<VectorData> results = new ArrayList<>();
 		float[] floatVector = new float[vector.size()];
 		for (int i = 0; i < vector.size(); i++) {
@@ -326,21 +323,15 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 							)
 							where distance <= ?
 							fetch first ? rows only
-					""", distance_metrics_func, vectortab, jsonPathFilter);
+					""", distance_metrics_func, "vector_store", jsonPathFilter);
 
-			results = jdbcTemplate.query(similaritySql, new PreparedStatementSetter() {
-				public void setValues(java.sql.PreparedStatement ps) throws SQLException {
-					ps.setObject(1, floatVector, OracleType.VECTOR);
-					ps.setObject(2, distance, OracleType.NUMBER);
-					ps.setObject(3, topK, OracleType.NUMBER);
-				}
-			}, new RowMapper<VectorData>() {
-				public VectorData mapRow(ResultSet rs, int rowNum) throws SQLException {
-					return new VectorData(rs.getString("id"), rs.getObject("embeddings", double[].class),
-							rs.getObject("text", String.class), rs.getObject("metadata", OracleJsonObject.class),
-							((BigDecimal) rs.getObject("distance", BigDecimal.class)).doubleValue());
-				}
-			});
+			results = jdbcTemplate.query(similaritySql, ps -> {
+				ps.setObject(1, floatVector, OracleType.VECTOR);
+				ps.setObject(2, distance, OracleType.NUMBER);
+				ps.setObject(3, topK, OracleType.NUMBER);
+			}, (rs, rowNum) -> new VectorData(rs.getString("id"), rs.getObject("embeddings", double[].class),
+					rs.getObject("text", String.class), rs.getObject("metadata", OracleJsonObject.class),
+					rs.getObject("distance", BigDecimal.class).doubleValue()));
 
 		}
 		catch (Exception e) {
@@ -356,7 +347,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 	public void afterPropertiesSet() throws Exception {
 		if (removeExistingVectorStoreTable) {
 			try {
-				logger.debug("Dropping table " + this.VECTOR_TABLE + " because removeExistingVectorStoreTable = true.");
+				logger.debug("Dropping table {} because removeExistingVectorStoreTable = true.", this.VECTOR_TABLE);
 
 				jdbcTemplate.execute(String.format("""
 						        begin
@@ -370,7 +361,7 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 						""", this.VECTOR_TABLE));
 			}
 			catch (Exception e) {
-				logger.error("Error dropping table " + this.VECTOR_TABLE + " \n" + e.getMessage());
+				logger.error("Error dropping table {} \n{}", this.VECTOR_TABLE, e.getMessage());
 				throw (e);
 			}
 		}
@@ -384,15 +375,15 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 					            metadata json,
 					            primary key (id))
 					""", this.VECTOR_TABLE));
-			logger.debug("Create table " + this.VECTOR_TABLE);
+			logger.debug("Create table {}", this.VECTOR_TABLE);
 		}
 		catch (DataAccessException e) {
 			if ((e.getCause() instanceof SQLSyntaxErrorException)
 					&& (((SQLSyntaxErrorException) e.getCause()).getErrorCode() == 955)) {
-				logger.info("Using existing table " + this.VECTOR_TABLE);
+				logger.info("Using existing table {}", this.VECTOR_TABLE);
 			}
 			else {
-				logger.error("Error creating table\n" + e.getMessage());
+				logger.error("Error creating table\n{}", e.getMessage());
 				throw (e);
 			}
 		}
@@ -409,14 +400,14 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 									%s
 									WITH DISTANCE %s
 									WITH TARGET ACCURACY %d
-									""", indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(), VECTOR_TABLE,
-						indexTypeSQL, distanceType, accuracy);
+						""", indexType.toString().toLowerCase(), VECTOR_TABLE.toLowerCase(), VECTOR_TABLE, indexTypeSQL,
+						distanceType, accuracy);
 				this.jdbcTemplate.execute(createVectorIndexStatement);
 				logger.debug(String.format("Create index  %s_%s_idx ", indexType.toString().toLowerCase(),
 						VECTOR_TABLE.toLowerCase()));
 			}
 			catch (DataAccessException e) {
-				logger.error("Error creating index\n" + e.getMessage());
+				logger.error("Error creating index\n{}", e.getMessage());
 				throw (e);
 			}
 		}
@@ -438,9 +429,9 @@ public class OracleVectorStore implements VectorStore, InitializingBean {
 		}
 		catch (Exception e) {
 			logger.warn("Failed to obtain the embedding dimensions from the embedding model and fall backs to default:"
-					+ OPENAI_EMBEDDING_DIMENSION_SIZE);
+					+ COHERE_EMBEDDING_DIMENSION_SIZE);
 		}
-		return OPENAI_EMBEDDING_DIMENSION_SIZE;
+		return COHERE_EMBEDDING_DIMENSION_SIZE;
 	}
 
 }

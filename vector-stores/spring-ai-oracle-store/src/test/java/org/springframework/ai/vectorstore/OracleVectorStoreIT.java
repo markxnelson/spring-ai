@@ -29,6 +29,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import org.junit.Assert;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -58,21 +59,21 @@ import com.oracle.bmc.Region;
 import com.oracle.bmc.auth.ConfigFileAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.zaxxer.hikari.HikariDataSource;
-import org.testcontainers.utility.MountableFile;
 
 /**
  * Tests for the Oracle Vector Store.
- * 
- * Please note: These tests use the OCI Generative AI Service to perform embeddings.  At the time of this
- * initial checkin, only Cohere models are available for embedding in this service.  Cohere models are all
- * normalized and therefore cosine is the only distance function that makes sense.  Note that euclidean
- * distance would be equivalent to cosine for normalized vectors but is more computationally expensive.
- * 
- * The tests below are parameterized with the distance function, however only COSINE is tested.
- * The parameterization has been left in place in anticipation of adding tests with different model in 
- * the future, or tests for images rather than text where we would expect to use different distance
- * functions.
- * 
+ *
+ * Please note: These tests use the OCI Generative AI Service to perform embeddings. At
+ * the time of this initial checkin, only Cohere models are available for embedding in
+ * this service. Cohere models are all normalized and therefore cosine is the only
+ * distance function that makes sense. Note that euclidean distance would be equivalent to
+ * cosine for normalized vectors but is more computationally expensive.
+ *
+ * The tests below are parameterized with the distance function, however only COSINE is
+ * tested. The parameterization has been left in place in anticipation of adding tests
+ * with different model in the future, or tests for images rather than text where we would
+ * expect to use different distance functions.
+ *
  * @author Corrado De Bari
  * @author Mark Nelson
  * @author Fernanda Meheust
@@ -82,6 +83,7 @@ import org.testcontainers.utility.MountableFile;
 public class OracleVectorStoreIT {
 
 	private static final String TABLE_NAME = "vector_store";
+
 	private static final int COHERE_ENG_LIGHT_v2_EMBEDDING_DIMENSION_SIZE = 1024;
 
 	@Container
@@ -334,15 +336,15 @@ public class OracleVectorStoreIT {
 			// check that the table exists
 			String tableCount = String.format("SELECT count(*) FROM USER_TABLES WHERE TABLE_NAME= '%s'",
 					TABLE_NAME.toUpperCase());
-			Assert.assertEquals("Table not found", 1L,
-					jdbcTemplate.queryForObject(tableCount, Integer.class).longValue());
+			Assertions.assertEquals(1L, jdbcTemplate.queryForObject(tableCount, Integer.class).longValue(),
+					"Table not found");
 
 			// check that index was created
 			long expectedCount = indexType.equals("NONE") ? 0L : 1L;
 			String indexCount = "SELECT count(*) FROM SYS.ALL_INDEXES where INDEX_NAME = "
 					+ String.format("'%s_%s_idx'", indexType, TABLE_NAME).toUpperCase();
-			Assert.assertEquals("Index not found", expectedCount,
-					jdbcTemplate.queryForObject(indexCount, Integer.class).longValue());
+			Assertions.assertEquals(expectedCount, jdbcTemplate.queryForObject(indexCount, Integer.class).longValue(),
+					"Index not found");
 
 			dropTable(context);
 		});
@@ -360,9 +362,8 @@ public class OracleVectorStoreIT {
 
 		@Bean
 		public VectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingClient) {
-			return new OracleVectorStore(jdbcTemplate, embeddingClient,
-					COHERE_ENG_LIGHT_v2_EMBEDDING_DIMENSION_SIZE, distanceType, true, indexType,
-					OracleVectorStore.DEFAULT_ACCURACY);
+			return new OracleVectorStore(jdbcTemplate, embeddingClient, COHERE_ENG_LIGHT_v2_EMBEDDING_DIMENSION_SIZE,
+					distanceType, true, indexType, OracleVectorStore.DEFAULT_ACCURACY);
 		}
 
 		@Bean
@@ -384,7 +385,6 @@ public class OracleVectorStoreIT {
 
 		@Bean
 		public EmbeddingModel embeddingClient() {
-			// return new OpenAiEmbeddingModel(new OpenAiApi(System.getenv("OPENAI_API_KEY")));
 			String CONFIG_FILE = Paths.get(System.getProperty("user.home"), ".oci", "config").toString();
 			String PROFILE = "DEFAULT";
 			Region REGION = Region.valueOf("us-chicago-1");
@@ -392,7 +392,8 @@ public class OracleVectorStoreIT {
 			String COMPARTMENT_ID = System.getenv("OCI_COMPARTMENT_ID");
 
 			try {
-				ConfigFileAuthenticationDetailsProvider authProvider = new ConfigFileAuthenticationDetailsProvider(CONFIG_FILE, PROFILE);
+				ConfigFileAuthenticationDetailsProvider authProvider = new ConfigFileAuthenticationDetailsProvider(
+						CONFIG_FILE, PROFILE);
 				GenerativeAiInferenceClient client = GenerativeAiInferenceClient.builder()
 					.region(REGION)
 					.build(authProvider);
@@ -402,7 +403,8 @@ public class OracleVectorStoreIT {
 					.withServingMode("on-demand")
 					.build();
 				return new OCIEmbeddingModel(client, options);
-			} catch (IOException e) {
+			}
+			catch (IOException e) {
 				throw new RuntimeException(e);
 			}
 		}
