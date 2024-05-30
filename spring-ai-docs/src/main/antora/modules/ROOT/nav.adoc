@@ -43,6 +43,7 @@
 *** xref:api/embeddings/mistralai-embeddings.adoc[Mistral AI]
 *** xref:api/embeddings/minimax-embeddings.adoc[MiniMax]
 *** xref:api/embeddings/zhipuai-embeddings.adoc[ZhiPu AI]
+*** xref:api/embeddings/oci-genai-embeddings.adoc[Oracle Cloud Infrastructure GenAI]
 ** xref:api/imageclient.adoc[]
 *** xref:api/image/azure-openai-image.adoc[Azure OpenAI]
 *** xref:api/image/openai-image.adoc[OpenAI]
