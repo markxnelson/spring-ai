@@ -26,6 +26,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.mistralai.api.MistralAiApi.ChatCompletionRequest.ResponseFormat;
 import org.springframework.ai.mistralai.api.MistralAiApi.ChatCompletionRequest.ToolChoice;
+import org.springframework.ai.mistralai.api.MistralAiApi;
 import org.springframework.ai.mistralai.api.MistralAiApi.FunctionTool;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallingOptions;
@@ -35,6 +36,7 @@ import org.springframework.util.Assert;
 /**
  * @author Ricken Bazolo
  * @author Christian Tzolov
+ * @author Thomas Vitale
  * @since 0.8.1
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -83,6 +85,13 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 	 * is valid JSON.
 	 */
 	private @JsonProperty("response_format") ResponseFormat responseFormat;
+
+	/**
+	 * Stop generation if this token is detected. Or if one of these tokens is detected
+	 * when providing an array.
+	 */
+	@NestedConfigurationProperty
+	private @JsonProperty("stop") List<String> stop;
 
 	/**
 	 * A list of tools the model may call. Currently, only functions are supported as a
@@ -139,6 +148,11 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 			return this;
 		}
 
+		public Builder withModel(MistralAiApi.ChatModel chatModel) {
+			this.options.setModel(chatModel.getName());
+			return this;
+		}
+
 		public Builder withMaxTokens(Integer maxTokens) {
 			this.options.setMaxTokens(maxTokens);
 			return this;
@@ -151,6 +165,11 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 
 		public Builder withRandomSeed(Integer randomSeed) {
 			this.options.setRandomSeed(randomSeed);
+			return this;
+		}
+
+		public Builder withStop(List<String> stop) {
+			this.options.setStop(stop);
 			return this;
 		}
 
@@ -202,6 +221,7 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 
 	}
 
+	@Override
 	public String getModel() {
 		return this.model;
 	}
@@ -210,6 +230,7 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 		this.model = model;
 	}
 
+	@Override
 	public Integer getMaxTokens() {
 		return this.maxTokens;
 	}
@@ -240,6 +261,25 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 
 	public void setResponseFormat(ResponseFormat responseFormat) {
 		this.responseFormat = responseFormat;
+	}
+
+	@Override
+	@JsonIgnore
+	public List<String> getStopSequences() {
+		return getStop();
+	}
+
+	@JsonIgnore
+	public void setStopSequences(List<String> stopSequences) {
+		setStop(stopSequences);
+	}
+
+	public List<String> getStop() {
+		return this.stop;
+	}
+
+	public void setStop(List<String> stop) {
+		this.stop = stop;
 	}
 
 	public void setTools(List<FunctionTool> tools) {
@@ -277,17 +317,6 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 	}
 
 	@Override
-	@JsonIgnore
-	public Integer getTopK() {
-		throw new UnsupportedOperationException("Unsupported option: 'TopK'");
-	}
-
-	@JsonIgnore
-	public void setTopK(Integer topK) {
-		throw new UnsupportedOperationException("Unsupported option: 'TopK'");
-	}
-
-	@Override
 	public List<FunctionCallback> getFunctionCallbacks() {
 		return this.functionCallbacks;
 	}
@@ -309,6 +338,29 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 		this.functions = functions;
 	}
 
+	@Override
+	@JsonIgnore
+	public Float getFrequencyPenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Float getPresencePenalty() {
+		return null;
+	}
+
+	@Override
+	@JsonIgnore
+	public Integer getTopK() {
+		return null;
+	}
+
+	@Override
+	public MistralAiChatOptions copy() {
+		return fromOptions(this);
+	}
+
 	public static MistralAiChatOptions fromOptions(MistralAiChatOptions fromOptions) {
 		return builder().withModel(fromOptions.getModel())
 			.withMaxTokens(fromOptions.getMaxTokens())
@@ -317,6 +369,7 @@ public class MistralAiChatOptions implements FunctionCallingOptions, ChatOptions
 			.withTemperature(fromOptions.getTemperature())
 			.withTopP(fromOptions.getTopP())
 			.withResponseFormat(fromOptions.getResponseFormat())
+			.withStop(fromOptions.getStop())
 			.withTools(fromOptions.getTools())
 			.withToolChoice(fromOptions.getToolChoice())
 			.withFunctionCallbacks(fromOptions.getFunctionCallbacks())

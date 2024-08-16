@@ -26,6 +26,7 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.ai.minimax.api.MiniMaxApi;
+import org.springframework.ai.minimax.metadata.MiniMaxUsage;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.retry.support.RetryTemplate;
@@ -35,9 +36,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MiniMax Embedding Client implementation.
+ * MiniMax Embedding Model implementation.
  *
  * @author Geng Rong
+ * @author Thomas Vitale
  * @since 1.0.0 M1
  */
 public class MiniMaxEmbeddingModel extends AbstractEmbeddingModel {
@@ -103,7 +105,7 @@ public class MiniMaxEmbeddingModel extends AbstractEmbeddingModel {
 	}
 
 	@Override
-	public List<Double> embed(Document document) {
+	public float[] embed(Document document) {
 		Assert.notNull(document, "Document must not be null");
 		return this.embed(document.getFormattedContent(this.metadataMode));
 	}
@@ -130,22 +132,16 @@ public class MiniMaxEmbeddingModel extends AbstractEmbeddingModel {
 				return new EmbeddingResponse(List.of());
 			}
 
-			var metadata = generateResponseMetadata(apiEmbeddingResponse.model(), apiEmbeddingResponse.totalTokens());
+			var metadata = new EmbeddingResponseMetadata(apiEmbeddingResponse.model(),
+					MiniMaxUsage.from(new MiniMaxApi.Usage(0, 0, apiEmbeddingResponse.totalTokens())));
 
 			List<Embedding> embeddings = new ArrayList<>();
 			for (int i = 0; i < apiEmbeddingResponse.vectors().size(); i++) {
-				List<Double> vector = apiEmbeddingResponse.vectors().get(i);
+				float[] vector = apiEmbeddingResponse.vectors().get(i);
 				embeddings.add(new Embedding(vector, i));
 			}
 			return new EmbeddingResponse(embeddings, metadata);
 		});
-	}
-
-	private EmbeddingResponseMetadata generateResponseMetadata(String model, Integer totalTokens) {
-		EmbeddingResponseMetadata metadata = new EmbeddingResponseMetadata();
-		metadata.put("model", model);
-		metadata.put("total-tokens", totalTokens);
-		return metadata;
 	}
 
 }

@@ -19,49 +19,55 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.springframework.ai.chroma.ChromaApi.QueryRequest.Include;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.support.BasicAuthenticationInterceptor;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.springframework.ai.chroma.ChromaApi.QueryRequest.Include;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.support.BasicAuthenticationInterceptor;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
-
 /**
  * Single-class Chroma API implementation based on the (unofficial) Chroma REST API.
  *
  * @author Christian Tzolov
+ * @author Eddú Meléndez
  */
 public class ChromaApi {
 
 	// Regular expression pattern that looks for a message inside the ValueError(...).
 	private static Pattern VALUE_ERROR_PATTERN = Pattern.compile("ValueError\\('([^']*)'\\)");
 
-	private final String baseUrl;
-
-	private final RestTemplate restTemplate;
+	private RestClient restClient;
 
 	private final ObjectMapper objectMapper;
 
 	private String keyToken;
 
-	public ChromaApi(String baseUrl, RestTemplate restTemplate) {
-		this(baseUrl, restTemplate, new ObjectMapper());
+	public ChromaApi(String baseUrl) {
+		this(baseUrl, RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()), new ObjectMapper());
 	}
 
-	public ChromaApi(String baseUrl, RestTemplate restTemplate, ObjectMapper objectMapper) {
-		this.baseUrl = baseUrl;
-		this.restTemplate = restTemplate;
+	public ChromaApi(String baseUrl, RestClient.Builder restClientBuilder) {
+		this(baseUrl, restClientBuilder, new ObjectMapper());
+	}
+
+	public ChromaApi(String baseUrl, RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
+		Consumer<HttpHeaders> defaultHeaders = headers -> {
+			headers.setContentType(MediaType.APPLICATION_JSON);
+		};
+		this.restClient = restClientBuilder.baseUrl(baseUrl).defaultHeaders(defaultHeaders).build();
 		this.objectMapper = objectMapper;
 	}
 
@@ -82,7 +88,9 @@ public class ChromaApi {
 	 * @param password Credentials password.
 	 */
 	public ChromaApi withBasicAuthCredentials(String username, String password) {
-		this.restTemplate.getInterceptors().add(new BasicAuthenticationInterceptor(username, password));
+		this.restClient = this.restClient.mutate()
+			.requestInterceptor(new BasicAuthenticationInterceptor(username, password))
+			.build();
 		return this;
 	}
 
@@ -174,7 +182,7 @@ public class ChromaApi {
 	 * @param documents List of document contents. One for each returned document.
 	 * @param metadata List of document metadata. One for each returned document.
 	 */
-	public record GetEmbeddingResponse(List<String> ids, List<List<Float>> embeddings, List<String> documents,
+	public record GetEmbeddingResponse(List<String> ids, List<float[]> embeddings, List<String> documents,
 			@JsonProperty("metadatas") List<Map<String, String>> metadata) {
 	}
 
@@ -190,7 +198,7 @@ public class ChromaApi {
 	 * "metadatas", "documents", "distances". Ids are always included. Defaults to
 	 * [metadatas, documents, distances].
 	 */
-	public record QueryRequest(@JsonProperty("query_embeddings") List<List<Float>> queryEmbeddings,
+	public record QueryRequest(@JsonProperty("query_embeddings") List<float[]> queryEmbeddings,
 			@JsonProperty("n_results") int nResults, Map<String, Object> where, List<Include> include) {
 
 		public enum Include {
@@ -214,11 +222,11 @@ public class ChromaApi {
 		/**
 		 * Convenience to query for a single embedding instead of a batch of embeddings.
 		 */
-		public QueryRequest(List<Float> queryEmbedding, int nResults) {
+		public QueryRequest(float[] queryEmbedding, int nResults) {
 			this(List.of(queryEmbedding), nResults, Map.of(), Include.all);
 		}
 
-		public QueryRequest(List<Float> queryEmbedding, int nResults, Map<String, Object> where) {
+		public QueryRequest(float[] queryEmbedding, int nResults, Map<String, Object> where) {
 			this(List.of(queryEmbedding), nResults, where, Include.all);
 		}
 	}
@@ -233,15 +241,14 @@ public class ChromaApi {
 	 * @param metadata List of list of document metadata. One for each returned document.
 	 * @param distances List of list of search distances. One for each returned document.
 	 */
-	public record QueryResponse(List<List<String>> ids, List<List<List<Float>>> embeddings,
-			List<List<String>> documents, @JsonProperty("metadatas") List<List<Map<String, Object>>> metadata,
-			List<List<Double>> distances) {
+	public record QueryResponse(List<List<String>> ids, List<List<float[]>> embeddings, List<List<String>> documents,
+			@JsonProperty("metadatas") List<List<Map<String, Object>>> metadata, List<List<Double>> distances) {
 	}
 
 	/**
 	 * Single query embedding response.
 	 */
-	public record Embedding(String id, List<Float> embedding, String document, Map<String, Object> metadata,
+	public record Embedding(String id, float[] embedding, String document, Map<String, Object> metadata,
 			Double distances) {
 	}
 
@@ -265,9 +272,23 @@ public class ChromaApi {
 
 	public Collection createCollection(CreateCollectionRequest createCollectionRequest) {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections", HttpMethod.POST,
-					this.getHttpEntityFor(createCollectionRequest), Collection.class)
+		return this.restClient.post()
+			.uri("/api/v1/collections")
+			.headers(this::httpHeaders)
+			.body(createCollectionRequest)
+			.retrieve()
+			.toEntity(Collection.class)
+			.getBody();
+	}
+
+	public Map<String, Object> createCollection2(CreateCollectionRequest createCollectionRequest) {
+
+		return this.restClient.post()
+			.uri("/api/v1/collections")
+			.headers(this::httpHeaders)
+			.body(createCollectionRequest)
+			.retrieve()
+			.toEntity(Map.class)
 			.getBody();
 	}
 
@@ -278,16 +299,21 @@ public class ChromaApi {
 	 */
 	public void deleteCollection(String collectionName) {
 
-		this.restTemplate.exchange(this.baseUrl + "/api/v1/collections/{collection_name}", HttpMethod.DELETE,
-				new HttpEntity<>(httpHeaders()), Void.class, collectionName);
+		this.restClient.delete()
+			.uri("/api/v1/collections/{collection_name}", collectionName)
+			.headers(this::httpHeaders)
+			.retrieve()
+			.toBodilessEntity();
 	}
 
 	public Collection getCollection(String collectionName) {
 
 		try {
-			return this.restTemplate
-				.exchange(this.baseUrl + "/api/v1/collections/{collection_name}", HttpMethod.GET,
-						new HttpEntity<>(httpHeaders()), Collection.class, collectionName)
+			return this.restClient.get()
+				.uri("/api/v1/collections/{collection_name}", collectionName)
+				.headers(this::httpHeaders)
+				.retrieve()
+				.toEntity(Collection.class)
 				.getBody();
 		}
 		catch (HttpServerErrorException e) {
@@ -305,9 +331,11 @@ public class ChromaApi {
 
 	public List<Collection> listCollections() {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections", HttpMethod.GET, new HttpEntity<>(httpHeaders()),
-					CollectionList.class)
+		return this.restClient.get()
+			.uri("/api/v1/collections")
+			.headers(this::httpHeaders)
+			.retrieve()
+			.toEntity(CollectionList.class)
 			.getBody();
 	}
 
@@ -317,41 +345,55 @@ public class ChromaApi {
 
 	public void upsertEmbeddings(String collectionId, AddEmbeddingsRequest embedding) {
 
-		this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections/{collection_id}/upsert", HttpMethod.POST,
-					this.getHttpEntityFor(embedding), Boolean.class, collectionId)
-			.getBody();
+		this.restClient.post()
+			.uri("/api/v1/collections/{collection_id}/upsert", collectionId)
+			.headers(this::httpHeaders)
+			.body(embedding)
+			.retrieve()
+			.toBodilessEntity();
 	}
 
 	public List<String> deleteEmbeddings(String collectionId, DeleteEmbeddingsRequest deleteRequest) {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections/{collection_id}/delete", HttpMethod.POST,
-					this.getHttpEntityFor(deleteRequest), List.class, collectionId)
+		return this.restClient.post()
+			.uri("/api/v1/collections/{collection_id}/delete", collectionId)
+			.headers(this::httpHeaders)
+			.body(deleteRequest)
+			.retrieve()
+			.toEntity(new ParameterizedTypeReference<List<String>>() {
+			})
 			.getBody();
 	}
 
 	public Long countEmbeddings(String collectionId) {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections/{collection_id}/count", HttpMethod.GET,
-					new HttpEntity<>(httpHeaders()), Long.class, collectionId)
+		return this.restClient.get()
+			.uri("/api/v1/collections/{collection_id}/count", collectionId)
+			.headers(this::httpHeaders)
+			.retrieve()
+			.toEntity(Long.class)
 			.getBody();
 	}
 
 	public QueryResponse queryCollection(String collectionId, QueryRequest queryRequest) {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections/{collection_id}/query", HttpMethod.POST,
-					this.getHttpEntityFor(queryRequest), QueryResponse.class, collectionId)
+		return this.restClient.post()
+			.uri("/api/v1/collections/{collection_id}/query", collectionId)
+			.headers(this::httpHeaders)
+			.body(queryRequest)
+			.retrieve()
+			.toEntity(QueryResponse.class)
 			.getBody();
 	}
 
 	public GetEmbeddingResponse getEmbeddings(String collectionId, GetEmbeddingsRequest getEmbeddingsRequest) {
 
-		return this.restTemplate
-			.exchange(this.baseUrl + "/api/v1/collections/{collection_id}/get", HttpMethod.POST,
-					this.getHttpEntityFor(getEmbeddingsRequest), GetEmbeddingResponse.class, collectionId)
+		return this.restClient.post()
+			.uri("/api/v1/collections/{collection_id}/get", collectionId)
+			.headers(this::httpHeaders)
+			.body(getEmbeddingsRequest)
+			.retrieve()
+			.toEntity(GetEmbeddingResponse.class)
 			.getBody();
 	}
 
@@ -365,17 +407,10 @@ public class ChromaApi {
 		}
 	}
 
-	private <T> HttpEntity<T> getHttpEntityFor(T body) {
-		return new HttpEntity<>(body, httpHeaders());
-	}
-
-	private HttpHeaders httpHeaders() {
-		HttpHeaders headers = new HttpHeaders();
-		headers.setContentType(MediaType.APPLICATION_JSON);
+	private void httpHeaders(HttpHeaders headers) {
 		if (StringUtils.hasText(this.keyToken)) {
 			headers.setBearerAuth(this.keyToken);
 		}
-		return headers;
 	}
 
 	private String getValueErrorMessage(String logString) {

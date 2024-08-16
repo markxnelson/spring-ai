@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.mongodb.BasicDBObject;
-
+import com.mongodb.MongoCommandException;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.model.EmbeddingUtils;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -36,6 +37,7 @@ import static org.springframework.data.mongodb.core.query.Criteria.where;
 
 /**
  * @author Chris Smith
+ * @author Soby Chacko
  * @since 1.0.0
  */
 public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
@@ -55,6 +57,10 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 	private static final String DEFAULT_PATH_NAME = "embedding";
 
 	private static final int DEFAULT_NUM_CANDIDATES = 200;
+
+	private static final int INDEX_ALREADY_EXISTS_ERROR_CODE = 68;
+
+	private static final String INDEX_ALREADY_EXISTS_ERROR_CODE_NAME = "IndexAlreadyExists";
 
 	private final MongoTemplate mongoTemplate;
 
@@ -90,14 +96,31 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 		if (!mongoTemplate.collectionExists(this.config.collectionName)) {
 			mongoTemplate.createCollection(this.config.collectionName);
 		}
-		// Create search index, command doesn't do anything if already existing
-		mongoTemplate.executeCommand(createSearchIndex());
+		// Create search index
+		createSearchIndex();
+	}
+
+	private void createSearchIndex() {
+		try {
+			mongoTemplate.executeCommand(createSearchIndexDefinition());
+		}
+		catch (UncategorizedMongoDbException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof MongoCommandException commandException) {
+				// Ignore any IndexAlreadyExists errors
+				if (INDEX_ALREADY_EXISTS_ERROR_CODE == commandException.getCode()
+						|| INDEX_ALREADY_EXISTS_ERROR_CODE_NAME.equals(commandException.getErrorCodeName())) {
+					return;
+				}
+			}
+			throw e;
+		}
 	}
 
 	/**
 	 * Provides the Definition for the search index
 	 */
-	private org.bson.Document createSearchIndex() {
+	private org.bson.Document createSearchIndexDefinition() {
 		List<org.bson.Document> vectorFields = new ArrayList<>();
 
 		vectorFields.add(new org.bson.Document().append("type", "vector")
@@ -117,19 +140,17 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 	}
 
 	/**
-	 * Maps a BasicDBObject to a Spring AI Document
-	 * @param basicDBObject the basicDBObject to map to a spring ai document
-	 * @return the spring ai document
+	 * Maps a Bson Document to a Spring AI Document
+	 * @param mongoDocument the mongoDocument to map to a Spring AI Document
+	 * @return the Spring AI Document
 	 */
-	@SuppressWarnings("unchecked")
-	private Document mapBasicDbObject(BasicDBObject basicDBObject) {
-		String id = basicDBObject.getString(ID_FIELD_NAME);
-		String content = basicDBObject.getString(CONTENT_FIELD_NAME);
-		Map<String, Object> metadata = (Map<String, Object>) basicDBObject.get(METADATA_FIELD_NAME);
-		List<Double> embedding = (List<Double>) basicDBObject.get(this.config.pathName);
+	private Document mapMongoDocument(org.bson.Document mongoDocument, float[] queryEmbedding) {
+		String id = mongoDocument.getString(ID_FIELD_NAME);
+		String content = mongoDocument.getString(CONTENT_FIELD_NAME);
+		Map<String, Object> metadata = mongoDocument.get(METADATA_FIELD_NAME, org.bson.Document.class);
 
 		Document document = new Document(id, content, metadata);
-		document.setEmbedding(embedding);
+		document.setEmbedding(queryEmbedding);
 
 		return document;
 	}
@@ -137,7 +158,7 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 	@Override
 	public void add(List<Document> documents) {
 		for (Document document : documents) {
-			List<Double> embedding = this.embeddingModel.embed(document);
+			float[] embedding = this.embeddingModel.embed(document);
 			document.setEmbedding(embedding);
 			this.mongoTemplate.save(document, this.config.collectionName);
 		}
@@ -164,9 +185,9 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 		String nativeFilterExpressions = (request.getFilterExpression() != null)
 				? this.filterExpressionConverter.convertExpression(request.getFilterExpression()) : "";
 
-		List<Double> queryEmbedding = this.embeddingModel.embed(request.getQuery());
-		var vectorSearch = new VectorSearchAggregation(queryEmbedding, this.config.pathName, this.config.numCandidates,
-				this.config.vectorIndexName, request.getTopK(), nativeFilterExpressions);
+		float[] queryEmbedding = this.embeddingModel.embed(request.getQuery());
+		var vectorSearch = new VectorSearchAggregation(EmbeddingUtils.toList(queryEmbedding), this.config.pathName,
+				this.config.numCandidates, this.config.vectorIndexName, request.getTopK(), nativeFilterExpressions);
 
 		Aggregation aggregation = Aggregation.newAggregation(vectorSearch,
 				Aggregation.addFields()
@@ -175,10 +196,10 @@ public class MongoDBAtlasVectorStore implements VectorStore, InitializingBean {
 					.build(),
 				Aggregation.match(new Criteria(SCORE_FIELD_NAME).gte(request.getSimilarityThreshold())));
 
-		return this.mongoTemplate.aggregate(aggregation, this.config.collectionName, BasicDBObject.class)
+		return this.mongoTemplate.aggregate(aggregation, this.config.collectionName, org.bson.Document.class)
 			.getMappedResults()
 			.stream()
-			.map(this::mapBasicDbObject)
+			.map(d -> mapMongoDocument(d, queryEmbedding))
 			.toList();
 	}
 

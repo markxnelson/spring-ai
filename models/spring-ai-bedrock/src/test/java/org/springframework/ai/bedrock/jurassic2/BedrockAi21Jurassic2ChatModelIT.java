@@ -77,7 +77,7 @@ class BedrockAi21Jurassic2ChatModelIT {
 			.applyToEmojis(false)
 			.build();
 		BedrockAi21Jurassic2ChatOptions options = new BedrockAi21Jurassic2ChatOptions.Builder()
-			.withPresencePenalty(penalty)
+			.withPresencePenaltyOptions(penalty)
 			.build();
 
 		UserMessage userMessage = new UserMessage("Can you express happiness using an emoji like 😄 ?");
@@ -94,7 +94,7 @@ class BedrockAi21Jurassic2ChatModelIT {
 		// applyToEmojis is by default true
 		BedrockAi21Jurassic2ChatOptions.Penalty penalty = new BedrockAi21Jurassic2ChatOptions.Penalty.Builder().build();
 		BedrockAi21Jurassic2ChatOptions options = new BedrockAi21Jurassic2ChatOptions.Builder()
-			.withPresencePenalty(penalty)
+			.withPresencePenaltyOptions(penalty)
 			.build();
 
 		UserMessage userMessage = new UserMessage("Can you express happiness using an emoji like 😄?");
@@ -127,6 +127,7 @@ class BedrockAi21Jurassic2ChatModelIT {
 
 	}
 
+	@Disabled("Jurrasic2 is very unstable")
 	@Test
 	void simpleChatResponse() {
 		UserMessage userMessage = new UserMessage("Tell me a joke about AI.");
@@ -146,7 +147,7 @@ class BedrockAi21Jurassic2ChatModelIT {
 		@Bean
 		public Ai21Jurassic2ChatBedrockApi jurassic2ChatBedrockApi() {
 			return new Ai21Jurassic2ChatBedrockApi(
-					Ai21Jurassic2ChatBedrockApi.Ai21Jurassic2ChatModel.AI21_J2_MID_V1.id(),
+					Ai21Jurassic2ChatBedrockApi.Ai21Jurassic2ChatModel.AI21_J2_ULTRA_V1.id(),
 					EnvironmentVariableCredentialsProvider.create(), Region.US_EAST_1.id(), new ObjectMapper(),
 					Duration.ofMinutes(2));
 		}

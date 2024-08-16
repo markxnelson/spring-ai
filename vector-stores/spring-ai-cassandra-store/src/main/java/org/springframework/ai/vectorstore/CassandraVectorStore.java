@@ -28,10 +28,13 @@ import com.datastax.oss.driver.api.querybuilder.delete.DeleteSelection;
 import com.datastax.oss.driver.api.querybuilder.insert.InsertInto;
 import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
 import com.datastax.oss.driver.shaded.guava.common.base.Preconditions;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.model.EmbeddingUtils;
 import org.springframework.ai.vectorstore.CassandraVectorStoreConfig.SchemaColumn;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 
@@ -124,10 +127,14 @@ public class CassandraVectorStore implements VectorStore, AutoCloseable {
 
 	private final Similarity similarity;
 
+	public static CassandraVectorStore create(CassandraVectorStoreConfig conf, EmbeddingModel embeddingModel) {
+		return new CassandraVectorStore(conf, embeddingModel);
+	}
+
 	public CassandraVectorStore(CassandraVectorStoreConfig conf, EmbeddingModel embeddingModel) {
 
 		Preconditions.checkArgument(null != conf, "Config must not be null");
-		Preconditions.checkArgument(null != embeddingModel, "Embedding client must not be null");
+		Preconditions.checkArgument(null != embeddingModel, "Embedding model must not be null");
 
 		this.conf = conf;
 		this.embeddingModel = embeddingModel;
@@ -157,7 +164,7 @@ public class CassandraVectorStore implements VectorStore, AutoCloseable {
 			futures[i++] = CompletableFuture.runAsync(() -> {
 				List<Object> primaryKeyValues = this.conf.documentIdTranslator.apply(d.getId());
 
-				if (null == d.getEmbedding() || d.getEmbedding().isEmpty()) {
+				if (null == d.getEmbedding() || d.getEmbedding().length == 0) {
 					d.setEmbedding(this.embeddingModel.embed(d));
 				}
 
@@ -169,8 +176,7 @@ public class CassandraVectorStore implements VectorStore, AutoCloseable {
 
 				builder = builder.setString(this.conf.schema.content(), d.getContent())
 					.setVector(this.conf.schema.embedding(),
-							CqlVector.newInstance(d.getEmbedding().stream().map(Double::floatValue).toList()),
-							Float.class);
+							CqlVector.newInstance(EmbeddingUtils.toList(d.getEmbedding())), Float.class);
 
 				for (var metadataColumn : this.conf.schema.metadataColumns()
 					.stream()
@@ -235,10 +241,8 @@ public class CassandraVectorStore implements VectorStore, AutoCloseable {
 			Document doc = new Document(getDocumentId(row), row.getString(this.conf.schema.content()), docFields);
 
 			if (this.conf.returnEmbeddings) {
-				doc.setEmbedding(row.getVector(this.conf.schema.embedding(), Float.class)
-					.stream()
-					.map(Float::doubleValue)
-					.toList());
+				doc.setEmbedding(EmbeddingUtils
+					.toPrimitive(row.getVector(this.conf.schema.embedding(), Float.class).stream().toList()));
 			}
 			documents.add(doc);
 		}
@@ -353,10 +357,10 @@ public class CassandraVectorStore implements VectorStore, AutoCloseable {
 		return this.conf.primaryKeyTranslator.apply(primaryKeyValues);
 	}
 
-	private static Float[] toFloatArray(List<Double> embeddingDouble) {
-		Float[] embeddingFloat = new Float[embeddingDouble.size()];
+	private static Float[] toFloatArray(float[] embedding) {
+		Float[] embeddingFloat = new Float[embedding.length];
 		int i = 0;
-		for (Double d : embeddingDouble) {
+		for (Float d : embedding) {
 			embeddingFloat[i++] = d.floatValue();
 		}
 		return embeddingFloat;

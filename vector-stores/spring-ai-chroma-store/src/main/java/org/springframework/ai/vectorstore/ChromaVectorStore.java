@@ -28,7 +28,6 @@ import org.springframework.ai.chroma.ChromaApi.Embedding;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
-import org.springframework.ai.vectorstore.filter.converter.ChromaFilterExpressionConverter;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
@@ -98,7 +97,7 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 			metadatas.add(document.getMetadata());
 			contents.add(document.getContent());
 			document.setEmbedding(this.embeddingModel.embed(document));
-			embeddings.add(JsonUtils.toFloatArray(document.getEmbedding()));
+			embeddings.add(document.getEmbedding());
 		}
 
 		this.chromaApi.upsertEmbeddings(this.collectionId,
@@ -122,10 +121,10 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 		String query = request.getQuery();
 		Assert.notNull(query, "Query string must not be null");
 
-		List<Double> embedding = this.embeddingModel.embed(query);
+		float[] embedding = this.embeddingModel.embed(query);
 		Map<String, Object> where = (StringUtils.hasText(nativeFilterExpression))
 				? JsonUtils.jsonToMap(nativeFilterExpression) : Map.of();
-		var queryRequest = new ChromaApi.QueryRequest(JsonUtils.toFloatList(embedding), request.getTopK(), where);
+		var queryRequest = new ChromaApi.QueryRequest(embedding, request.getTopK(), where);
 		var queryResponse = this.chromaApi.queryCollection(this.collectionId, queryRequest);
 		var embeddings = this.chromaApi.toEmbeddingResponseList(queryResponse);
 
@@ -142,7 +141,7 @@ public class ChromaVectorStore implements VectorStore, InitializingBean {
 				}
 				metadata.put(DISTANCE_FIELD_NAME, distance);
 				Document document = new Document(id, content, metadata);
-				document.setEmbedding(JsonUtils.toDouble(chromaEmbedding.embedding()));
+				document.setEmbedding(chromaEmbedding.embedding());
 				responseDocuments.add(document);
 			}
 		}

@@ -19,7 +19,8 @@ import javax.sql.DataSource;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.PgVectorStore;
-import org.springframework.beans.factory.InitializingBean;
+import org.springframework.ai.vectorstore.observation.VectorStoreObservationConvention;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -27,6 +28,8 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import io.micrometer.observation.ObservationRegistry;
 
 /**
  * @author Christian Tzolov
@@ -40,10 +43,22 @@ public class PgVectorStoreAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	public PgVectorStore vectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel embeddingModel,
-			PgVectorStoreProperties properties) {
+			PgVectorStoreProperties properties, ObjectProvider<ObservationRegistry> observationRegistry,
+			ObjectProvider<VectorStoreObservationConvention> customSearchObservationConvention) {
+
 		var initializeSchema = properties.isInitializeSchema();
-		return new PgVectorStore(jdbcTemplate, embeddingModel, properties.getDimensions(), properties.getDistanceType(),
-				properties.isRemoveExistingVectorStoreTable(), properties.getIndexType(), initializeSchema);
+
+		return new PgVectorStore.Builder(jdbcTemplate, embeddingModel).withSchemaName(properties.getSchemaName())
+			.withVectorTableName(properties.getTableName())
+			.withVectorTableValidationsEnabled(properties.isSchemaValidation())
+			.withDimensions(properties.getDimensions())
+			.withDistanceType(properties.getDistanceType())
+			.withRemoveExistingVectorStoreTable(properties.isRemoveExistingVectorStoreTable())
+			.withIndexType(properties.getIndexType())
+			.withInitializeSchema(initializeSchema)
+			.withObservationRegistry(observationRegistry.getIfUnique(() -> ObservationRegistry.NOOP))
+			.withSearchObservationConvention(customSearchObservationConvention.getIfAvailable(() -> null))
+			.build();
 	}
 
 }

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.ai.vectorstore;
 
 import java.time.Duration;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
@@ -36,6 +38,7 @@ import io.pinecone.proto.Vector;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.model.EmbeddingUtils;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 import org.springframework.ai.vectorstore.filter.converter.PineconeFilterExpressionConverter;
 import org.springframework.util.Assert;
@@ -51,9 +54,9 @@ import org.springframework.util.StringUtils;
  */
 public class PineconeVectorStore implements VectorStore {
 
-	private static final String CONTENT_FIELD_NAME = "document_content";
+	public static final String CONTENT_FIELD_NAME = "document_content";
 
-	private static final String DISTANCE_METADATA_FIELD_NAME = "distance";
+	public static final String DISTANCE_METADATA_FIELD_NAME = "distance";
 
 	public final FilterExpressionConverter filterExpressionConverter = new PineconeFilterExpressionConverter();
 
@@ -62,6 +65,10 @@ public class PineconeVectorStore implements VectorStore {
 	private final PineconeConnection pineconeConnection;
 
 	private final String pineconeNamespace;
+
+	private final String pineconeContentFieldName;
+
+	private final String pineconeDistanceMetadataFieldName;
 
 	private final ObjectMapper objectMapper;
 
@@ -73,6 +80,10 @@ public class PineconeVectorStore implements VectorStore {
 		// The free tier (gcp-starter) doesn't support Namespaces.
 		// Leave the namespace empty (e.g. "") for the free tier.
 		private final String namespace;
+
+		private final String contentFieldName;
+
+		private final String distanceMetadataFieldName;
 
 		private final PineconeConnectionConfig connectionConfig;
 
@@ -90,6 +101,9 @@ public class PineconeVectorStore implements VectorStore {
 		 */
 		public PineconeVectorStoreConfig(Builder builder) {
 			this.namespace = builder.namespace;
+			this.contentFieldName = builder.contentFieldName;
+			this.distanceMetadataFieldName = builder.distanceMetadataFieldName;
+
 			// this.defaultSimilarityTopK = builder.defaultSimilarityTopK;
 			this.connectionConfig = new PineconeConnectionConfig().withIndexName(builder.indexName);
 			this.clientConfig = new PineconeClientConfig().withApiKey(builder.apiKey)
@@ -126,6 +140,10 @@ public class PineconeVectorStore implements VectorStore {
 
 			// The free-tier (gcp-starter) doesn't support Namespaces!
 			private String namespace = "";
+
+			private String contentFieldName = CONTENT_FIELD_NAME;
+
+			private String distanceMetadataFieldName = DISTANCE_METADATA_FIELD_NAME;
 
 			/**
 			 * Optional server-side timeout in seconds for all operations. Default: 20
@@ -188,6 +206,26 @@ public class PineconeVectorStore implements VectorStore {
 			}
 
 			/**
+			 * Content field name.
+			 * @param contentFieldName content field name to use.
+			 * @return this builder.
+			 */
+			public Builder withContentFieldName(String contentFieldName) {
+				this.contentFieldName = contentFieldName;
+				return this;
+			}
+
+			/**
+			 * Distance metadata field name.
+			 * @param distanceMetadataFieldName distance metadata field name to use.
+			 * @return this builder.
+			 */
+			public Builder withDistanceMetadataFieldName(String distanceMetadataFieldName) {
+				this.distanceMetadataFieldName = distanceMetadataFieldName;
+				return this;
+			}
+
+			/**
 			 * Pinecone server side timeout.
 			 * @param serverSideTimeout server timeout to use.
 			 * @return this builder.
@@ -219,6 +257,8 @@ public class PineconeVectorStore implements VectorStore {
 
 		this.embeddingModel = embeddingModel;
 		this.pineconeNamespace = config.namespace;
+		this.pineconeContentFieldName = config.contentFieldName;
+		this.pineconeDistanceMetadataFieldName = config.distanceMetadataFieldName;
 		this.pineconeConnection = new PineconeClient(config.clientConfig).connect(config.connectionConfig);
 		this.objectMapper = new ObjectMapper();
 	}
@@ -236,7 +276,7 @@ public class PineconeVectorStore implements VectorStore {
 
 			return Vector.newBuilder()
 				.setId(document.getId())
-				.addAllValues(toFloatList(document.getEmbedding()))
+				.addAllValues(EmbeddingUtils.toList(document.getEmbedding()))
 				.setMetadata(metadataToStruct(document))
 				.build();
 		}).toList();
@@ -269,7 +309,7 @@ public class PineconeVectorStore implements VectorStore {
 			JsonFormat.parser()
 				.ignoringUnknownFields()
 				.merge(this.objectMapper.writeValueAsString(document.getMetadata()), structBuilder);
-			structBuilder.putFields(CONTENT_FIELD_NAME, contentValue(document));
+			structBuilder.putFields(this.pineconeContentFieldName, contentValue(document));
 			return structBuilder.build();
 		}
 		catch (Exception e) {
@@ -321,10 +361,10 @@ public class PineconeVectorStore implements VectorStore {
 		String nativeExpressionFilters = (request.getFilterExpression() != null)
 				? this.filterExpressionConverter.convertExpression(request.getFilterExpression()) : "";
 
-		List<Double> queryEmbedding = this.embeddingModel.embed(request.getQuery());
+		float[] queryEmbedding = this.embeddingModel.embed(request.getQuery());
 
 		var queryRequestBuilder = QueryRequest.newBuilder()
-			.addAllVector(toFloatList(queryEmbedding))
+			.addAllVector(EmbeddingUtils.toList(queryEmbedding))
 			.setTopK(request.getTopK())
 			.setIncludeMetadata(true)
 			.setNamespace(namespace);
@@ -341,9 +381,9 @@ public class PineconeVectorStore implements VectorStore {
 			.map(scoredVector -> {
 				var id = scoredVector.getId();
 				Struct metadataStruct = scoredVector.getMetadata();
-				var content = metadataStruct.getFieldsOrThrow(CONTENT_FIELD_NAME).getStringValue();
+				var content = metadataStruct.getFieldsOrThrow(this.pineconeContentFieldName).getStringValue();
 				Map<String, Object> metadata = extractMetadata(metadataStruct);
-				metadata.put(DISTANCE_METADATA_FIELD_NAME, 1 - scoredVector.getScore());
+				metadata.put(this.pineconeDistanceMetadataFieldName, 1 - scoredVector.getScore());
 				return new Document(id, content, metadata);
 			})
 			.toList();
@@ -374,22 +414,14 @@ public class PineconeVectorStore implements VectorStore {
 	private Map<String, Object> extractMetadata(Struct metadataStruct) {
 		try {
 			String json = JsonFormat.printer().print(metadataStruct);
-			Map<String, Object> metadata = this.objectMapper.readValue(json, Map.class);
-			metadata.remove(CONTENT_FIELD_NAME);
+			Map<String, Object> metadata = this.objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
+			});
+			metadata.remove(this.pineconeContentFieldName);
 			return metadata;
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-	}
-
-	/**
-	 * Converts a list of doubles to a list of floats.
-	 * @param doubleList The list of doubles.
-	 * @return The converted list of floats.
-	 */
-	private List<Float> toFloatList(List<Double> doubleList) {
-		return doubleList.stream().map(d -> d.floatValue()).toList();
 	}
 
 }

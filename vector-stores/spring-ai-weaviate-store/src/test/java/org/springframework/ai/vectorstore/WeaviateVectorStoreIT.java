@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 package org.springframework.ai.vectorstore;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -22,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import io.weaviate.client.Config;
-import io.weaviate.client.WeaviateClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -39,24 +39,19 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.weaviate.WeaviateContainer;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import io.weaviate.client.Config;
+import io.weaviate.client.WeaviateClient;
 
 /**
  * @author Christian Tzolov
  * @author Eddú Meléndez
+ * @author Soby Chacko
  */
 @Testcontainers
 public class WeaviateVectorStoreIT {
 
 	@Container
-	static WeaviateContainer weaviateContainer = new WeaviateContainer("semitechnologies/weaviate:1.22.4");
+	static WeaviateContainer weaviateContainer = new WeaviateContainer("semitechnologies/weaviate:1.25.4");
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withUserConfiguration(TestApplication.class);
@@ -258,7 +253,7 @@ public class WeaviateVectorStoreIT {
 				.withConsistencyLevel(WeaviateVectorStoreConfig.ConsistentLevel.ONE)
 				.build();
 
-			return new WeaviateVectorStore(config, embeddingModel, weaviateClient, true);
+			return new WeaviateVectorStore(config, embeddingModel, weaviateClient);
 
 		}
 

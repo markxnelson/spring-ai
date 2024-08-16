@@ -15,26 +15,24 @@
  */
 package org.springframework.ai.chroma;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.chromadb.ChromaDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.SpringBootConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
 import org.springframework.ai.chroma.ChromaApi.AddEmbeddingsRequest;
 import org.springframework.ai.chroma.ChromaApi.Collection;
 import org.springframework.ai.chroma.ChromaApi.GetEmbeddingsRequest;
 import org.springframework.ai.chroma.ChromaApi.QueryRequest;
-import org.springframework.web.client.RestTemplate;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
+import org.testcontainers.chromadb.ChromaDBContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * @author Christian Tzolov
@@ -45,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ChromaApiIT {
 
 	@Container
-	static ChromaDBContainer chromaContainer = new ChromaDBContainer("ghcr.io/chroma-core/chroma:0.4.22");
+	static ChromaDBContainer chromaContainer = new ChromaDBContainer("ghcr.io/chroma-core/chroma:0.5.0");
 
 	@Autowired
 	ChromaApi chroma;
@@ -94,7 +92,7 @@ public class ChromaApiIT {
 		assertThat(chroma.countEmbeddings(newCollection.id())).isEqualTo(3);
 
 		var queryResult = chroma.queryCollection(newCollection.id(),
-				new QueryRequest(List.of(1f, 1f, 1f), 3, chroma.where("""
+				new QueryRequest(new float[] { 1f, 1f, 1f }, 3, chroma.where("""
 						{
 							"key2" : { "$eq": true }
 						}
@@ -110,7 +108,7 @@ public class ChromaApiIT {
 		assertThat(result.ids().get(0)).isEqualTo("id2");
 
 		queryResult = chroma.queryCollection(newCollection.id(),
-				new QueryRequest(List.of(1f, 1f, 1f), 3, chroma.where("""
+				new QueryRequest(new float[] { 1f, 1f, 1f }, 3, chroma.where("""
 						{
 							"key2" : { "$eq": true }
 						}
@@ -141,7 +139,7 @@ public class ChromaApiIT {
 
 		assertThat(chroma.countEmbeddings(collection.id())).isEqualTo(3);
 
-		var queryResult = chroma.queryCollection(collection.id(), new QueryRequest(List.of(1f, 1f, 1f), 3));
+		var queryResult = chroma.queryCollection(collection.id(), new QueryRequest(new float[] { 1f, 1f, 1f }, 3));
 
 		assertThat(queryResult.ids().get(0)).hasSize(3);
 		assertThat(queryResult.ids().get(0)).containsExactlyInAnyOrder("id1", "id2", "id3");
@@ -151,26 +149,28 @@ public class ChromaApiIT {
 		assertThat(chromaEmbeddings).hasSize(3);
 		assertThat(chromaEmbeddings).hasSize(3);
 
-		queryResult = chroma.queryCollection(collection.id(), new QueryRequest(List.of(1f, 1f, 1f), 3, chroma.where("""
-				{
-					"$and" : [
-						{"country" : { "$eq": "BG"}},
-						{"year" : { "$gte": 2020}}
-					]
-				}
-				""")));
+		queryResult = chroma.queryCollection(collection.id(),
+				new QueryRequest(new float[] { 1f, 1f, 1f }, 3, chroma.where("""
+						{
+							"$and" : [
+								{"country" : { "$eq": "BG"}},
+								{"year" : { "$gte": 2020}}
+							]
+						}
+						""")));
 		assertThat(queryResult.ids().get(0)).hasSize(2);
 		assertThat(queryResult.ids().get(0)).containsExactlyInAnyOrder("id1", "id3");
 
-		queryResult = chroma.queryCollection(collection.id(), new QueryRequest(List.of(1f, 1f, 1f), 3, chroma.where("""
-				{
-					"$and" : [
-						{"country" : { "$eq": "BG"}},
-						{"year" : { "$gte": 2020}},
-						{"active" : { "$eq": true}}
-					]
-				}
-				""")));
+		queryResult = chroma.queryCollection(collection.id(),
+				new QueryRequest(new float[] { 1f, 1f, 1f }, 3, chroma.where("""
+						{
+							"$and" : [
+								{"country" : { "$eq": "BG"}},
+								{"year" : { "$gte": 2020}},
+								{"active" : { "$eq": true}}
+							]
+						}
+						""")));
 		assertThat(queryResult.ids().get(0)).hasSize(1);
 		assertThat(queryResult.ids().get(0)).containsExactlyInAnyOrder("id1");
 	}
@@ -179,13 +179,8 @@ public class ChromaApiIT {
 	public static class Config {
 
 		@Bean
-		public RestTemplate restTemplate() {
-			return new RestTemplate();
-		}
-
-		@Bean
-		public ChromaApi chromaApi(RestTemplate restTemplate) {
-			return new ChromaApi(chromaContainer.getEndpoint(), restTemplate);
+		public ChromaApi chromaApi() {
+			return new ChromaApi(chromaContainer.getEndpoint());
 		}
 
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 - 2024 the original author or authors.
+ * Copyright 2023-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ import io.weaviate.client.v1.graphql.query.fields.Fields;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.model.EmbeddingUtils;
 import org.springframework.ai.vectorstore.WeaviateVectorStore.WeaviateVectorStoreConfig.ConsistentLevel;
 import org.springframework.ai.vectorstore.WeaviateVectorStore.WeaviateVectorStoreConfig.MetadataField;
 import org.springframework.beans.factory.InitializingBean;
@@ -62,8 +63,9 @@ import org.springframework.util.StringUtils;
  * @author Christian Tzolov
  * @author Eddú Meléndez
  * @author Josh Long
+ * @author Soby Chacko
  */
-public class WeaviateVectorStore implements VectorStore, InitializingBean {
+public class WeaviateVectorStore implements VectorStore {
 
 	public static final String DOCUMENT_METADATA_DISTANCE_KEY_NAME = "distance";
 
@@ -115,7 +117,7 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 	 * Used to serialize/deserialize the document metadata when stored/retrieved from the
 	 * weaviate vector store.
 	 */
-	private final ObjectMapper objetMapper = new ObjectMapper();
+	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	/**
 	 * Configuration class for the WeaviateVectorStore.
@@ -281,11 +283,10 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 	 * @param embeddingModel The client for embedding operations.
 	 */
 	public WeaviateVectorStore(WeaviateVectorStoreConfig vectorStoreConfig, EmbeddingModel embeddingModel,
-			WeaviateClient weaviateClient, boolean initializeSchema) {
+			WeaviateClient weaviateClient) {
 		Assert.notNull(vectorStoreConfig, "WeaviateVectorStoreConfig must not be null");
 		Assert.notNull(embeddingModel, "EmbeddingModel must not be null");
 
-		this.initializeSchema = initializeSchema;
 		this.embeddingModel = embeddingModel;
 		this.consistencyLevel = vectorStoreConfig.consistencyLevel;
 		this.weaviateObjectClass = vectorStoreConfig.weaviateObjectClass;
@@ -361,8 +362,8 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 
 	private WeaviateObject toWeaviateObject(Document document) {
 
-		if (CollectionUtils.isEmpty(document.getEmbedding())) {
-			List<Double> embedding = this.embeddingModel.embed(document);
+		if (document.getEmbedding() == null || document.getEmbedding().length == 0) {
+			float[] embedding = this.embeddingModel.embed(document);
 			document.setEmbedding(embedding);
 		}
 
@@ -370,7 +371,7 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 		Map<String, Object> fields = new HashMap<>();
 		fields.put(CONTENT_FIELD_NAME, document.getContent());
 		try {
-			String metadataString = this.objetMapper.writeValueAsString(document.getMetadata());
+			String metadataString = this.objectMapper.writeValueAsString(document.getMetadata());
 			fields.put(METADATA_FIELD_NAME, metadataString);
 		}
 		catch (JsonProcessingException e) {
@@ -388,7 +389,7 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 		return WeaviateObject.builder()
 			.className(this.weaviateObjectClass)
 			.id(document.getId())
-			.vector(toFloatArray(document.getEmbedding()))
+			.vector(EmbeddingUtils.toFloatArray(document.getEmbedding()))
 			.properties(fields)
 			.build();
 	}
@@ -422,13 +423,13 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 	@Override
 	public List<Document> similaritySearch(SearchRequest request) {
 
-		Float[] embedding = toFloatArray(this.embeddingModel.embed(request.getQuery()));
+		float[] embedding = this.embeddingModel.embed(request.getQuery());
 
 		GetBuilder.GetBuilderBuilder builder = GetBuilder.builder();
 
 		GetBuilderBuilder queryBuilder = builder.className(this.weaviateObjectClass)
 			.withNearVectorFilter(NearVectorArgument.builder()
-				.vector(embedding)
+				.vector(EmbeddingUtils.toFloatArray(embedding))
 				.certainty((float) request.getSimilarityThreshold())
 				.build())
 			.limit(request.getTopK())
@@ -501,7 +502,7 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 		try {
 			String metadataJson = (String) item.get(METADATA_FIELD_NAME);
 			if (StringUtils.hasText(metadataJson)) {
-				metadata.putAll(this.objetMapper.readValue(metadataJson, Map.class));
+				metadata.putAll(this.objectMapper.readValue(metadataJson, Map.class));
 			}
 		}
 		catch (Exception e) {
@@ -512,51 +513,9 @@ public class WeaviateVectorStore implements VectorStore, InitializingBean {
 		String content = (String) item.get(CONTENT_FIELD_NAME);
 
 		var document = new Document(id, content, metadata);
-		document.setEmbedding(embedding);
+		document.setEmbedding(EmbeddingUtils.toPrimitive(EmbeddingUtils.doubleToFloat(embedding)));
 
 		return document;
-	}
-
-	/**
-	 * Converts a list of doubles to an array of floats.
-	 * @param doubleList The list of doubles.
-	 * @return The converted array of floats.
-	 */
-	private Float[] toFloatArray(List<Double> doubleList) {
-		return doubleList.stream().map(Number::floatValue).toList().toArray(new Float[0]);
-	}
-
-	private final boolean initializeSchema;
-
-	@Override
-	public void afterPropertiesSet() throws Exception {
-
-		if (!this.initializeSchema) {
-			return;
-		}
-
-		Map<String, Object> metadata = new HashMap<>();
-		if (!CollectionUtils.isEmpty(this.filterMetadataFields)) {
-			for (MetadataField mf : this.filterMetadataFields) {
-				switch (mf.type()) {
-					case TEXT:
-						metadata.put(mf.name(), "Hello");
-						break;
-					case NUMBER:
-						metadata.put(mf.name(), 3.14);
-						break;
-					case BOOLEAN:
-						metadata.put(mf.name(), true);
-						break;
-					default:
-						break;
-				}
-			}
-		}
-
-		var document = new Document("Hello world", metadata);
-		this.add(List.of(document));
-		this.delete(List.of(document.getId()));
 	}
 
 }
