@@ -20,7 +20,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.oci.OCIEmbeddingModel;
@@ -29,8 +28,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@EnabledIfEnvironmentVariable(named = OCIGenAiAutoConfigurationTest.COMPARTMENT_ID_KEY, matches = ".+")
-public class OCIGenAiAutoConfigurationTest {
+@EnabledIfEnvironmentVariable(named = OCIGenAiAutoConfigurationIT.COMPARTMENT_ID_KEY, matches = ".+")
+public class OCIGenAiAutoConfigurationIT {
 
 	public static final String COMPARTMENT_ID_KEY = "OCI_COMPARTMENT_ID";
 
@@ -53,8 +52,8 @@ public class OCIGenAiAutoConfigurationTest {
 		contextRunner.run(context -> {
 			OCIEmbeddingModel embeddingModel = context.getBean(OCIEmbeddingModel.class);
 			assertThat(embeddingModel).isNotNull();
-			EmbeddingResponse response = embeddingModel.call(new EmbeddingRequest(
-					List.of("There are 50 states in the USA", "Canada has 10 provinces"), EmbeddingOptions.EMPTY));
+			EmbeddingResponse response = embeddingModel
+				.call(new EmbeddingRequest(List.of("There are 50 states in the USA", "Canada has 10 provinces"), null));
 			assertThat(response).isNotNull();
 			assertThat(response.getResults()).hasSize(2);
 		});

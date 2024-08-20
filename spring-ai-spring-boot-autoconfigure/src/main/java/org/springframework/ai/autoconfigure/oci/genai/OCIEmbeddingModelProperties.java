@@ -15,6 +15,7 @@
  */
 package org.springframework.ai.autoconfigure.oci.genai;
 
+import com.oracle.bmc.generativeaiinference.model.EmbedTextDetails;
 import org.springframework.ai.oci.OCIEmbeddingOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -28,6 +29,8 @@ public class OCIEmbeddingModelProperties {
 
 	private ServingMode servingMode = ServingMode.ON_DEMAND;
 
+	private EmbedTextDetails.Truncate truncate = EmbedTextDetails.Truncate.End;
+
 	private String compartment;
 
 	private String model;
@@ -39,6 +42,7 @@ public class OCIEmbeddingModelProperties {
 			.withCompartment(compartment)
 			.withModel(model)
 			.withServingMode(servingMode.getMode())
+			.withTruncate(truncate)
 			.build();
 	}
 
@@ -72,6 +76,14 @@ public class OCIEmbeddingModelProperties {
 
 	public void setEnabled(boolean enabled) {
 		this.enabled = enabled;
+	}
+
+	public EmbedTextDetails.Truncate getTruncate() {
+		return truncate;
+	}
+
+	public void setTruncate(EmbedTextDetails.Truncate truncate) {
+		this.truncate = truncate;
 	}
 
 }

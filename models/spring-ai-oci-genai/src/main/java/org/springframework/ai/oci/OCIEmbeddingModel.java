@@ -17,24 +17,31 @@ package org.springframework.ai.oci;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import com.oracle.bmc.generativeaiinference.GenerativeAiInference;
 import com.oracle.bmc.generativeaiinference.model.DedicatedServingMode;
 import com.oracle.bmc.generativeaiinference.model.EmbedTextDetails;
+import com.oracle.bmc.generativeaiinference.model.EmbedTextResult;
 import com.oracle.bmc.generativeaiinference.model.OnDemandServingMode;
 import com.oracle.bmc.generativeaiinference.model.ServingMode;
 import com.oracle.bmc.generativeaiinference.requests.EmbedTextRequest;
-import com.oracle.bmc.generativeaiinference.responses.EmbedTextResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.AbstractEmbeddingModel;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
-import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
+import org.springframework.ai.embedding.observation.DefaultEmbeddingModelObservationConvention;
+import org.springframework.ai.embedding.observation.EmbeddingModelObservationContext;
+import org.springframework.ai.embedding.observation.EmbeddingModelObservationConvention;
+import org.springframework.ai.embedding.observation.EmbeddingModelObservationDocumentation;
 import org.springframework.ai.model.ModelOptionsUtils;
+import org.springframework.ai.observation.conventions.AiProvider;
 import org.springframework.util.Assert;
 
 /**
@@ -42,36 +49,77 @@ import org.springframework.util.Assert;
  */
 public class OCIEmbeddingModel extends AbstractEmbeddingModel {
 
-	private final GenerativeAiInferenceClient generativeAiClient;
+	// The OCI GenAI API has a batch size of 96 for embed text requests.
+	private static final int EMBEDTEXT_BATCH_SIZE = 96;
+
+	private static final EmbeddingModelObservationConvention DEFAULT_OBSERVATION_CONVENTION = new DefaultEmbeddingModelObservationConvention();
+
+	private final GenerativeAiInference genAi;
 
 	private final OCIEmbeddingOptions options;
 
-	public OCIEmbeddingModel(GenerativeAiInferenceClient generativeAiClient, OCIEmbeddingOptions options) {
-		Assert.notNull(generativeAiClient,
-				"com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient must not be null");
-		Assert.notNull(options, "Options must not be null");
-		this.generativeAiClient = generativeAiClient;
+	private final ObservationRegistry observationRegistry;
+
+	private EmbeddingModelObservationConvention observationConvention = DEFAULT_OBSERVATION_CONVENTION;
+
+	public OCIEmbeddingModel(GenerativeAiInference genAi, OCIEmbeddingOptions options) {
+		this(genAi, options, ObservationRegistry.NOOP);
+	}
+
+	public OCIEmbeddingModel(GenerativeAiInference genAi, OCIEmbeddingOptions options,
+			ObservationRegistry observationRegistry) {
+		Assert.notNull(genAi, "com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient must not be null");
+		Assert.notNull(options, "options must not be null");
+		Assert.notNull(observationRegistry, "observationRegistry must not be null");
+		this.genAi = genAi;
 		this.options = options;
+		this.observationRegistry = observationRegistry;
 	}
 
 	@Override
 	public EmbeddingResponse call(EmbeddingRequest request) {
-		OCIEmbeddingOptions embeddingOptions;
-		if (request.getOptions() != null && !EmbeddingOptions.EMPTY.equals(request.getOptions())) {
-			embeddingOptions = ModelOptionsUtils.merge(request.getOptions(), options, OCIEmbeddingOptions.class);
-		}
-		else {
-			embeddingOptions = options;
-		}
+		Assert.notEmpty(request.getInstructions(), "At least one text is required!");
+		OCIEmbeddingOptions runtimeOptions = mergeOptions(request.getOptions(), options);
+		List<EmbedTextRequest> embedTextRequests = createRequests(request.getInstructions(), runtimeOptions);
 
-		EmbedTextRequest embedTextRequest = generateEmbedTextRequest(request.getInstructions(), embeddingOptions);
-		return generateEmbeddingResponse(generativeAiClient.embedText(embedTextRequest));
+		EmbeddingModelObservationContext context = EmbeddingModelObservationContext.builder()
+			.embeddingRequest(request)
+			.provider(AiProvider.OCI_GENAI.value())
+			.requestOptions(runtimeOptions)
+			.build();
+
+		return EmbeddingModelObservationDocumentation.EMBEDDING_MODEL_OPERATION
+			.observation(this.observationConvention, DEFAULT_OBSERVATION_CONVENTION, () -> context,
+					this.observationRegistry)
+			.observe(() -> embedAllWithContext(embedTextRequests, context));
 	}
 
 	@Override
-	public List<Double> embed(Document document) {
-		EmbedTextRequest embedTextRequest = generateEmbedTextRequest(List.of(document.getContent()), options);
-		return toEmbeddings(generativeAiClient.embedText(embedTextRequest));
+	public float[] embed(Document document) {
+		return embed(document.getContent());
+	}
+
+	private EmbeddingResponse embedAllWithContext(List<EmbedTextRequest> embedTextRequests,
+			EmbeddingModelObservationContext context) {
+		String modelId = null;
+		AtomicInteger index = new AtomicInteger(0);
+		List<Embedding> embeddings = new ArrayList<>();
+		for (EmbedTextRequest embedTextRequest : embedTextRequests) {
+			EmbedTextResult embedTextResult = genAi.embedText(embedTextRequest).getEmbedTextResult();
+			if (modelId == null) {
+				modelId = embedTextResult.getModelId();
+			}
+			for (List<Float> e : embedTextResult.getEmbeddings()) {
+				float[] data = toFloats(e);
+				embeddings.add(new Embedding(data, index.getAndIncrement()));
+			}
+		}
+		EmbeddingResponseMetadata metadata = new EmbeddingResponseMetadata();
+		metadata.setModel(modelId);
+		metadata.setUsage(new EmptyUsage());
+		EmbeddingResponse embeddingResponse = new EmbeddingResponse(embeddings, metadata);
+		context.setResponse(embeddingResponse);
+		return embeddingResponse;
 	}
 
 	private ServingMode servingMode(OCIEmbeddingOptions embeddingOptions) {
@@ -83,48 +131,43 @@ public class OCIEmbeddingModel extends AbstractEmbeddingModel {
 		};
 	}
 
-	private EmbedTextRequest generateEmbedTextRequest(List<String> inputs, OCIEmbeddingOptions embeddingOptions) {
+	private List<EmbedTextRequest> createRequests(List<String> inputs, OCIEmbeddingOptions embeddingOptions) {
+		int size = inputs.size();
+		List<EmbedTextRequest> requests = new ArrayList<>();
+		for (int i = 0; i < inputs.size(); i += EMBEDTEXT_BATCH_SIZE) {
+			List<String> batch = inputs.subList(i, Math.min(i + EMBEDTEXT_BATCH_SIZE, size));
+			requests.add(createRequest(batch, embeddingOptions));
+		}
+		return requests;
+	}
+
+	private EmbedTextRequest createRequest(List<String> inputs, OCIEmbeddingOptions embeddingOptions) {
 		EmbedTextDetails embedTextDetails = EmbedTextDetails.builder()
 			.servingMode(servingMode(embeddingOptions))
 			.compartmentId(embeddingOptions.getCompartment())
 			.inputs(inputs)
-			.truncate(EmbedTextDetails.Truncate.None)
+			.truncate(Objects.requireNonNullElse(embeddingOptions.getTruncate(), EmbedTextDetails.Truncate.End))
 			.build();
 		return EmbedTextRequest.builder().embedTextDetails(embedTextDetails).build();
 	}
 
-	private EmbeddingResponse generateEmbeddingResponse(EmbedTextResponse embedTextResponse) {
-		List<Embedding> embeddings = generateEmbeddingList(embedTextResponse);
-		EmbeddingResponseMetadata metadata = generateMetadata(embedTextResponse);
-		return new EmbeddingResponse(embeddings, metadata);
-	}
-
-	private EmbeddingResponseMetadata generateMetadata(EmbedTextResponse embedTextResponse) {
-		EmbeddingResponseMetadata metadata = new EmbeddingResponseMetadata();
-		metadata.put("model", embedTextResponse.getEmbedTextResult().getModelId());
-		return metadata;
-	}
-
-	private List<Embedding> generateEmbeddingList(EmbedTextResponse embedTextResponse) {
-		List<List<Float>> nativeData = embedTextResponse.getEmbedTextResult().getEmbeddings();
-		List<Embedding> embeddings = new ArrayList<>();
-		for (int i = 0; i < nativeData.size(); i++) {
-			List<Double> data = toDoubleList(nativeData.get(i));
-			embeddings.add(new Embedding(data, i));
+	private OCIEmbeddingOptions mergeOptions(EmbeddingOptions embeddingOptions, OCIEmbeddingOptions defaultOptions) {
+		if (embeddingOptions instanceof OCIEmbeddingOptions) {
+			OCIEmbeddingOptions dynamicOptions = ModelOptionsUtils.merge(embeddingOptions, defaultOptions,
+					OCIEmbeddingOptions.class);
+			if (dynamicOptions != null) {
+				return dynamicOptions;
+			}
 		}
-		return embeddings;
+		return defaultOptions;
 	}
 
-	private List<Double> toEmbeddings(EmbedTextResponse embedTextResponse) {
-		List<List<Float>> embeddings = embedTextResponse.getEmbedTextResult().getEmbeddings();
-		if (embeddings.size() != 1) {
-			throw new RuntimeException("expected exactly one OCI embedding result");
+	private float[] toFloats(List<Float> embedding) {
+		float[] floats = new float[embedding.size()];
+		for (int i = 0; i < embedding.size(); i++) {
+			floats[i] = embedding.get(i);
 		}
-		return toDoubleList(embeddings.get(0));
-	}
-
-	private List<Double> toDoubleList(List<Float> embeddings) {
-		return embeddings.stream().map(Float::doubleValue).toList();
+		return floats;
 	}
 
 }

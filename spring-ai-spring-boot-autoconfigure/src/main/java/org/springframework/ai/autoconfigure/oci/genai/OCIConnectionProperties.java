@@ -53,8 +53,6 @@ public class OCIConnectionProperties {
 
 	private String file = Paths.get(System.getProperty("user.home"), ".oci", "config").toString();
 
-	;
-
 	private String tenantId;
 
 	private String userId;

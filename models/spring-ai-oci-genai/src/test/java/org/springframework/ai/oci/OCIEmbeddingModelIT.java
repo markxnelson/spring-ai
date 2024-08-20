@@ -20,33 +20,31 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.ai.oci.EmbeddingModelProvider.EMBEDDING_MODEL_V2;
-import static org.springframework.ai.oci.EmbeddingModelProvider.EMBEDDING_MODEL_V3;
+import static org.springframework.ai.oci.BaseEmbeddingModelTest.OCI_COMPARTMENT_ID_KEY;
 
-@EnabledIfEnvironmentVariable(named = EmbeddingModelProvider.OCI_COMPARTMENT_ID_KEY, matches = ".+")
-public class OCIEmbeddingModelTest {
+@EnabledIfEnvironmentVariable(named = OCI_COMPARTMENT_ID_KEY, matches = ".+")
+public class OCIEmbeddingModelIT extends BaseEmbeddingModelTest {
 
-	private final OCIEmbeddingModel embeddingModel = EmbeddingModelProvider.get();
+	private final OCIEmbeddingModel embeddingModel = get();
 
 	private final List<String> content = List.of("How many states are in the USA?", "How many states are in India?");
 
 	@Test
 	void embed() {
-		List<Double> embedding = embeddingModel.embed(new Document("How many provinces are in Canada?"));
+		float[] embedding = embeddingModel.embed(new Document("How many provinces are in Canada?"));
 		assertThat(embedding).hasSize(1024);
 	}
 
 	@Test
 	void call() {
-		EmbeddingResponse response = embeddingModel.call(new EmbeddingRequest(content, EmbeddingOptions.EMPTY));
+		EmbeddingResponse response = embeddingModel.call(new EmbeddingRequest(content, null));
 		assertThat(response).isNotNull();
 		assertThat(response.getResults()).hasSize(2);
-		assertThat(response.getMetadata()).containsEntry("model", EMBEDDING_MODEL_V2);
+		assertThat(response.getMetadata().getModel()).isEqualTo(EMBEDDING_MODEL_V2);
 	}
 
 	@Test
@@ -55,7 +53,7 @@ public class OCIEmbeddingModelTest {
 			.call(new EmbeddingRequest(content, OCIEmbeddingOptions.builder().withModel(EMBEDDING_MODEL_V3).build()));
 		assertThat(response).isNotNull();
 		assertThat(response.getResults()).hasSize(2);
-		assertThat(response.getMetadata()).containsEntry("model", EMBEDDING_MODEL_V3);
+		assertThat(response.getMetadata().getModel()).isEqualTo(EMBEDDING_MODEL_V3);
 	}
 
 }

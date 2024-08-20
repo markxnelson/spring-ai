@@ -17,6 +17,7 @@ package org.springframework.ai.oci;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.oracle.bmc.generativeaiinference.model.EmbedTextDetails;
 import org.springframework.ai.embedding.EmbeddingOptions;
 
 /**
@@ -32,6 +33,8 @@ public class OCIEmbeddingOptions implements EmbeddingOptions {
 	private @JsonProperty("compartment") String compartment;
 
 	private @JsonProperty("servingMode") String servingMode;
+
+	private @JsonProperty("truncate") EmbedTextDetails.Truncate truncate;
 
 	public static Builder builder() {
 		return new Builder();
@@ -56,6 +59,11 @@ public class OCIEmbeddingOptions implements EmbeddingOptions {
 			return this;
 		}
 
+		public Builder withTruncate(EmbedTextDetails.Truncate truncate) {
+			this.options.truncate = truncate;
+			return this;
+		}
+
 		public OCIEmbeddingOptions build() {
 			return this.options;
 		}
@@ -64,6 +72,15 @@ public class OCIEmbeddingOptions implements EmbeddingOptions {
 
 	public String getModel() {
 		return this.model;
+	}
+
+	/**
+	 * Not used by OCI GenAI.
+	 * @return null
+	 */
+	@Override
+	public Integer getDimensions() {
+		return null;
 	}
 
 	public void setModel(String model) {
@@ -84,6 +101,14 @@ public class OCIEmbeddingOptions implements EmbeddingOptions {
 
 	public void setServingMode(String servingMode) {
 		this.servingMode = servingMode;
+	}
+
+	public EmbedTextDetails.Truncate getTruncate() {
+		return truncate;
+	}
+
+	public void setTruncate(EmbedTextDetails.Truncate truncate) {
+		this.truncate = truncate;
 	}
 
 }

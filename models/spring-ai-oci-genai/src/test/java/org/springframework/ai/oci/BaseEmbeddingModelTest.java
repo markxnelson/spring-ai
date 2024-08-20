@@ -22,7 +22,7 @@ import com.oracle.bmc.Region;
 import com.oracle.bmc.auth.ConfigFileAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 
-public class EmbeddingModelProvider {
+public class BaseEmbeddingModelTest {
 
 	public static final String OCI_COMPARTMENT_ID_KEY = "OCI_COMPARTMENT_ID";
 
@@ -38,6 +38,10 @@ public class EmbeddingModelProvider {
 
 	private static final String COMPARTMENT_ID = System.getenv(OCI_COMPARTMENT_ID_KEY);
 
+	/**
+	 * Create an OCIEmbeddingModel instance using a config file authentication provider.
+	 * @return OCIEmbeddingModel instance
+	 */
 	public static OCIEmbeddingModel get() {
 		try {
 			ConfigFileAuthenticationDetailsProvider authProvider = new ConfigFileAuthenticationDetailsProvider(
