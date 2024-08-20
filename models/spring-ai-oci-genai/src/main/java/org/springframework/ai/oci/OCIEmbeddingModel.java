@@ -45,7 +45,11 @@ import org.springframework.ai.observation.conventions.AiProvider;
 import org.springframework.util.Assert;
 
 /**
+ * {@link org.springframework.ai.embedding.EmbeddingModel} implementation that uses the
+ * OCI GenAI Embedding API.
+ *
  * @author Anders Swanson
+ * @since 1.0.0
  */
 public class OCIEmbeddingModel extends AbstractEmbeddingModel {
 
